@@ -54,7 +54,7 @@
                 block/add-to-chain block))
 
 (defn add-block [state {:keys [transactions] :as block}]
-  (adjust-ledger state transactios)
+  (adjust-ledger state transactions)
   (adjust-transaction-pool state transactions)
   (add-to-chain state block))
 
