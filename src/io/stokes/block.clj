@@ -51,7 +51,7 @@
   [initial-state])
 
 (defn add-to-chain [blockchain block]
-  ;; TODO handle reorgs
+  ;; TODO handle reorgs, etc.
   (let [height (block :height)]
     (assoc blockchain height block)))
 
