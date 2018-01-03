@@ -1,39 +1,87 @@
 (ns io.stokes.p2p
   (:require [com.stuartsierra.component :as component]
-            [clojure.core.async :as async]))
+            [clojure.core.async :as async]
+            [clojure.edn :as edn])
+  (:refer-clojure :exclude [send])
+  (:import (java.net InetAddress
+                     InetSocketAddress
+                     DatagramPacket
+                     DatagramSocket
+                     SocketException)))
 
-(defn send-block [p2p block]
-  (println "publishing new block to peers!!!"))
-(defn send-transaction [p2p transaction]
-  (println "publishing transaction to peers!!!"))
+(defn- empty-packet [n]
+  (DatagramPacket. (byte-array n) n))
 
-(defn- send-empty-block [queue]
-  (async/go-loop [block {:nonce 1 :tag :new-block}]
-    (Thread/sleep 1000)
-    (async/>! queue block)
-    (recur (update block :nonce inc))))
+;; (def localhost (.getLocalHost InetAddress))
+(def localhost "localhost")
+(def packet-size 512)
 
-(defrecord Server [port state queue]
+(defn- msg-of [host port msg]
+  (let [str (prn-str msg)
+        payload (.getBytes str)
+        length (min (alength payload) packet-size)
+        address (InetSocketAddress. host port)]
+    (DatagramPacket. payload
+                     length
+                     address)))
+
+(defn- send [{:keys [socket port]} msg]
+  (.send socket (msg-of localhost port msg)))
+
+(defn- recieve-from [socket]
+  (let [packet (empty-packet packet-size)]
+    (.receive socket packet)
+    (String. (.getData packet)
+             0 (.getLength packet))))
+
+(defn receive [{:keys [socket]}]
+  (recieve-from socket))
+
+(defn- valid? [msg]
+  true)
+
+(defn- parse-str [str]
+  (edn/read-string str))
+
+(defn- process [queue msg]
+  (let [msg (parse-str msg)]
+    (when (valid? msg)
+      (async/go (async/>! queue msg)))))
+
+(defn- start [port]
+  (let [socket (DatagramSocket. port)]
+    {:socket socket
+     :stop (fn []
+             (.close socket))}))
+
+(defrecord Server [port]
   component/Lifecycle
   (start [server]
     (println "starting p2p server...")
-    (let [c (async/chan)]
-      (send-empty-block queue)
-      (assoc server :channel c)))
+    (merge server (start port)))
   (stop [server]
     (println "stopping p2p server...")
-    (let [{:keys [channel]} server]
-      (async/close! channel))
-    server))
-
-(defn recv [p2p]
-  "test async infra"
-  (async/<!! (:channel p2p)))
-
-(defn get-best-state [p2p & {:keys [:or default]}]
-  ;; TODO ask buddies
-  default)
+    (when-let [stop (:stop server)]
+      (stop))
+    (merge server {:socket nil
+                   :stop nil})))
 
 (defn new [config]
-  (component/using (map->Server (assoc config :queue (async/chan)))
-                   [:state]))
+  (component/using (map->Server config)
+                   []))
+
+(defn get-best-chain [p2p & {:keys [:or default]}]
+  ;; TODO ask peers
+  default)
+
+(defn send-block [p2p block]
+  (println "publishing new block to peers!!!"))
+  ;; (send p2p block))
+
+(defn send-transaction [p2p transaction]
+  (println "sending transaction to peers!!!"))
+;; (send p2p transaction))
+
+(defn query-inventory [p2p]
+  {:blocks []
+   :transactions []})
