@@ -6,6 +6,7 @@
             [io.stokes.transaction :as transaction]
             [io.stokes.transaction-pool :as transaction-pool]
             [io.stokes.state :as state ]
+            [io.stokes.queue :as queue]
             [crypto.random :as rand]
             [clojure.core.async :as async]
             [clojure.data.json :as json]
@@ -31,16 +32,19 @@
                   (let [transaction-pool (state/->transactions state)]
                     {:body (prn-str transaction-pool)}))
    (compojure/POST "/transaction" {:keys [body]}
-                   (let [transaction (->transaction body)]
-                     (async/go (async/>! queue {:tag :new-transaction
-                                                :transaction transaction}))
-                     {:status 200}))))
+                   (->> body
+                        ->transaction
+                        (queue/submit-transaction queue))
+                   {:status 200})))
+
+(defn- start [port state queue]
+  (http/run-server (make-handler state queue) {:port port}))
 
 (defrecord Server [port shutdown shutdown-timeout-ms state queue]
   component/Lifecycle
   (start [server]
     (println "starting rpc server...")
-    (assoc server :shutdown (http/run-server (make-handler state queue) {:port (:port server)})))
+    (assoc server :shutdown (start port state queue)))
   (stop [server]
     (println "stopping rpc server...")
     (let [{:keys [shutdown shutdown-timeout-ms]} server]
@@ -48,5 +52,5 @@
     server))
 
 (defn new [config]
-  (component/using (map->Server (assoc config :queue (async/chan)))
-                   [:state]))
+  (component/using (map->Server config)
+                   [:state :queue]))

@@ -4,7 +4,7 @@
             [io.stokes.block :as block]
             [io.stokes.transaction :as transaction]
             [io.stokes.transaction-pool :as transaction-pool]
-            [io.stokes.internal.async :as async]
+            [clojure.core.async :as async]
             [clj-time.core :as time]
             [clj-time.coerce :as coerce]))
 
@@ -55,34 +55,30 @@
         transactions (transaction-pool/take-by-fee transaction-pool 5)]
     (block/from transactions (peek blockchain) timestamps)))
 
-(defn- get-seed []
-  ;; TODO pick a better ceiling?
-  (rand-int 1000000000))
-
 (defn mine-for-nonces [{:keys [number-of-nonces blockchain transaction-pool]}]
-  (let [seed (get-seed)
+  (let [seed 0
         next-block (build-next-block blockchain transaction-pool)]
     (mine-range number-of-nonces (assoc next-block :nonce seed))))
 
-(defn start-mining []
-  (Thread/sleep 500)
-  (when (zero? (mod (rand-int 100) 3))
-    {:tag :new-block :nonce (rand-int 1000)}))
+(defn mine [chain seed number-of-rounds]
+  (let [block (last chain)]
+    (Thread/sleep 500)
+    (if (zero? (mod (rand-int 100) 10))
+      (assoc block :nonce seed)
+      nil)))
 
-(defrecord ProofOfWork [state queue]
-  component/Lifecycle
-  (start [miner]
-    (println "starting miner...")
-    (assoc miner :stop (async/deliver-until-stopped
-                        queue
-                        start-mining)))
-  (stop [miner]
-    (println "stopping miner...")
-    (when-let [stop (:stop miner)]
-      (stop))
-    (dissoc miner :stop)))
+;; (defrecord ProofOfWork [number-of-rounds state queue]
+;;   component/Lifecycle
+;;   (start [miner]
+;;     (println "starting miner...")
+;;     (assoc miner :stop (start-mining number-of-rounds state queue)))
+;;   (stop [miner]
+;;     (println "stopping miner...")
+;;     (when-let [stop (:stop miner)]
+;;       (stop))
+;;     (dissoc miner :stop)))
 
-(defn new [config]
-  (component/using
-   (map->ProofOfWork (assoc config :queue (async/chan)))
-   [:state]))
+;; (defn new [config]
+;;   (component/using
+;;    (map->ProofOfWork (assoc config :queue (async/chan)))
+;;    [:state]))

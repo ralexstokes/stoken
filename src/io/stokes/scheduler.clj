@@ -4,51 +4,99 @@
             [io.stokes.p2p :as p2p]
             [io.stokes.miner :as miner]
             [io.stokes.state :as state]
-            [io.stokes.block :as block]))
+            [io.stokes.block :as block]
+            [io.stokes.queue :as queue]))
 
-(defn- get-best-state-from [p2p & {default :or}]
-  (if-let [best-chain (p2p/get-best-state p2p)]
-    best-chain
-    default))
+(defn- cancel-miner [miner]
+  (when-let [cancel @miner]
+    (async/close! cancel)))
 
-(defn- start-mining [state]
-  )
+(defn- run-miner [queue miner chain]
+  (let [cancel (async/chan)
+        ;; TODO pick a better ceiling?
+        seed (rand-int 10000000)]
+    (async/go-loop []
+      (let [[_ channel] (async/alts! [cancel] :default :continue)]
+        (when-not (= channel cancel)
+          (when-let [block (miner/mine chain seed 250)]
+            (queue/submit-block queue block))
+          (recur))))
+    (reset! miner cancel)))
 
-(defn- init [state p2p]
-  (get-best-state-from p2p :or (state/->best-chain state))
-  (start-mining state))
+(defn- query-state-from-peers [queue p2p]
+  (async/go
+    (let [inventory (p2p/query-inventory p2p)]
+      (queue/submit-inventory queue inventory))))
 
-(defmulti dispatch :tag)
-(defmethod dispatch :new-block [{:keys [block]} {:keys [p2p]} state]
+(defmulti dispatch queue/dispatch)
+
+(defmethod dispatch :block [{:keys [block]} {:keys [state p2p queue] :as scheduler}]
   (state/add-block state block)
-  (p2p/send-block p2p block))
+  (p2p/send-block p2p block)
+  (queue/submit-request-to-mine queue))
 
-(defmethod dispatch :new-transaction [{:keys [transaction]} {:keys [p2p]} state]
+(defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
   (state/add-transaction state transaction)
   (p2p/send-transaction p2p transaction))
 
-(defn- run [scheduler state]
-  (let [stop (async/chan)
-        [p2p rpc miner] (map :queue [(:p2p scheduler) (:rpc scheduler) (:miner scheduler)])]
-    (async/go-loop []
-      (async/alt!
-        [p2p rpc miner] ([msg] (dispatch msg scheduler state) (recur))
-        [stop]          :done))
-    (fn []
-      (async/close! stop))))
+(defmethod dispatch :inventory [_ {:keys [queue p2p]}]
+  (query-state-from-peers queue p2p))
 
-(defrecord Scheduler [state p2p rpc miner]
+(defmethod dispatch :mine [_ {:keys [state queue miner]}]
+  (cancel-miner miner)
+  (let [chain (state/->best-chain state)]
+    (run-miner queue miner chain)))
+
+(defmethod dispatch :default [msg _]
+  (println "unknown message type:" msg))
+
+(defn- start-worker [{:keys [queue miner] :as scheduler}]
+  (let [stop (async/chan)]
+    (async/go-loop [[msg channel] (async/alts! [stop queue])]
+      (when-not (= channel stop)
+        (when msg
+          (dispatch msg scheduler)
+          (recur (async/alts! [stop queue])))))
+    stop))
+
+(defn- start-workers [{:keys [number-of-workers] :as scheduler}]
+  (loop [workers []
+         count number-of-workers]
+    (if (zero? count)
+      workers
+      (recur (conj workers (start-worker scheduler))
+             (dec count)))))
+
+(defn- stop-worker [worker]
+  (async/close! worker))
+
+(defn- stop-workers [workers]
+  (doall
+   (map stop-worker workers)))
+
+(defn- query-peers [queue]
+  (queue/submit-request-for-inventory queue))
+
+(defn- begin-mining [queue]
+  (queue/submit-request-to-mine queue))
+
+(defn- start [{:keys [queue state miner] :as scheduler}]
+  (let [workers (start-workers scheduler)]
+    (query-peers queue)
+    (begin-mining queue)
+    workers))
+
+(defrecord Scheduler [state queue p2p miner]
   component/Lifecycle
   (start [scheduler]
     (println "starting scheduler...")
-    (assoc scheduler :stop
-           (run scheduler state)))
+    (assoc scheduler :workers (start scheduler)))
   (stop [scheduler]
     (println "stopping scheduler...")
-    (when-let [stop (:stop scheduler)]
-      (stop))
-    (dissoc scheduler :stop)))
+    (cancel-miner miner)
+    (stop-workers (:workers scheduler))
+    (dissoc scheduler :workers)))
 
 (defn new [config]
-  (component/using (map->Scheduler {})
-                   [:state :p2p :rpc :miner]))
+  (component/using (map->Scheduler config)
+                   [:state :queue :p2p :miner]))

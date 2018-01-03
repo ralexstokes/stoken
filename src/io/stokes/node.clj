@@ -5,6 +5,7 @@
    [io.stokes.miner :as miner]
    [io.stokes.scheduler :as scheduler]
    [io.stokes.state :as state]
+   [io.stokes.queue :as queue]
    [com.stuartsierra.component :as component]
    [clojure.core.async :as async]))
 
@@ -12,8 +13,9 @@
   "constructs an instance of the system ready to run given the config"
   (component/system-map
    :config config
+   :queue (queue/new)
    :rpc (rpc/new rpc)
    :p2p (p2p/new p2p)
-   :miner (miner/new miner)
+   :miner (atom nil)
    :scheduler (scheduler/new scheduler)
    :state (state/new config)))
