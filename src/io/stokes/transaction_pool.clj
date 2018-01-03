@@ -13,8 +13,7 @@
        (set/difference pool)))
 
 (defn take-by-fee [pool n]
-  "returns a set of transactions with the highest fee"
+  "returns `n` transactions from the `pool` preferring those with higher fees"
   (->> pool
        (sort-by :fee >)
-       (take n)
-       (into #{})))
+       (take n)))
