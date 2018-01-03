@@ -9,8 +9,8 @@
   (reduce apply-transaction ledger transactions))
 
 (defn from [{:keys [initial-state]}]
-  ;; TODO add UTXO set here
-  (atom (into {} initial-state)))
+  ;; TODO adapt into UTXO set w/ "account" cache
+  (into {} initial-state))
 
 (defn balances [ledger]
-  @ledger)
+  ledger)
