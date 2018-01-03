@@ -29,6 +29,8 @@
    [io.stokes.transaction :as transaction]
    [io.stokes.ledger :as ledger]
    [io.stokes.miner :as miner]
+   [io.stokes.state :as state]
+   [io.stokes.queue :as queue]
    [io.stokes.hash :as hash]))
 
 (def pp pprint)
@@ -48,7 +50,7 @@
                                                      (* 100)
                                                      int)))
 
-(def transactions (take 100 (repeatedly mock-transaction)))
+(def mock-transactions (take 100 (repeatedly mock-transaction)))
 
 (defn- ledger-state [transactions]
   (reduce (fn [ledger {:keys [from to]}]
@@ -56,13 +58,19 @@
                 (assoc to   10000)
                 (assoc from 10000))) {} transactions))
 
-(def dev-config {:rpc              {:port 3000
-                                    :shutdown-timeout-ms 1000}
-                 :p2p              {:port 80808}
-                 :scheduler        {}
-                 :blockchain       {:initial-state genesis-block}
-                 :transaction-pool {:initial-state transactions}
-                 :ledger           {:initial-state (ledger-state transactions)}})
+(defn- config-with-transactions [transactions]
+  {:rpc              {:port 3000
+                      :shutdown-timeout-ms 1000}
+   :p2p              {:port 8888}
+   :scheduler        {:number-of-workers 1}
+   :miner            {:number-of-rounds 1000}
+   :blockchain       {:initial-state genesis-block}
+   :transaction-pool {:initial-state transactions}
+   :ledger           {:initial-state (ledger-state transactions)}})
+
+
+(def dev-config (config-with-transactions []))
+(def dev-config-with-transactions (config-with-transactions mock-transactions))
 
 (defn dev-system
   "Constructs a system map suitable for interactive development."
@@ -70,3 +78,19 @@
   (node/from dev-config))
 
 (set-init (fn [_] (dev-system)))
+
+
+;; some convenience functions for the REPL
+
+(defn b [system] (first (state/->best-chain (:state system))))
+
+(defn read-n-messages [p2p n]
+  (future (loop [count 0]
+            (while (< count n)
+              (println "got a mesg:"
+                       (p2p/receive p2p))))))
+
+;; (defmacro expose-system [system]
+;;   (for [component (keys system)]
+;;     `(def ~(symbol (name component))
+;;        (~component system))))
