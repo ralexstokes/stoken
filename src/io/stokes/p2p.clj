@@ -42,11 +42,6 @@
 (defn- parse-str [str]
   (edn/read-string str))
 
-;; (defn- process [queue msg]
-;;   (let [msg (parse-str msg)]
-;;     (when (valid? msg)
-;;       (async/go (async/>! queue msg)))))
-
 (defn- start [port]
   (let [socket (DatagramSocket. port)]
     {:socket socket
