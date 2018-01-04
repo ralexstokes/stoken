@@ -1,24 +1,19 @@
 (ns io.stokes.rpc
   (:require [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
-            [io.stokes.ledger :as ledger]
+            [compojure.core :as compojure]
+            [crypto.random :as rand]
+            [clojure.data.json :as json]
             [io.stokes.block :as block]
             [io.stokes.transaction :as transaction]
-            [io.stokes.transaction-pool :as transaction-pool]
-            [io.stokes.state :as state ]
-            [io.stokes.queue :as queue]
-            [crypto.random :as rand]
-            [clojure.core.async :as async]
-            [clojure.data.json :as json]
-            [compojure.core :as compojure]))
+            [io.stokes.state :as state]
+            [io.stokes.queue :as queue]))
 
 (defn- ->transaction [req]
-  (let [{:strs [from to amount]} (-> req
-                                     slurp
-                                     json/read-str)]
-    (transaction/from from to amount (-> (rand)
-                                         (* 100)
-                                         int))))
+  (let [{:strs [from to amount fee]} (-> req
+                                         slurp
+                                         json/read-str)]
+    (transaction/from from to amount fee)))
 
 (defn- make-handler [state queue]
   (compojure/routes

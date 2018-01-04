@@ -1,6 +1,5 @@
 (ns io.stokes.p2p
   (:require [com.stuartsierra.component :as component]
-            [clojure.core.async :as async]
             [clojure.edn :as edn])
   (:refer-clojure :exclude [send])
   (:import (java.net InetAddress
@@ -43,10 +42,10 @@
 (defn- parse-str [str]
   (edn/read-string str))
 
-(defn- process [queue msg]
-  (let [msg (parse-str msg)]
-    (when (valid? msg)
-      (async/go (async/>! queue msg)))))
+;; (defn- process [queue msg]
+;;   (let [msg (parse-str msg)]
+;;     (when (valid? msg)
+;;       (async/go (async/>! queue msg)))))
 
 (defn- start [port]
   (let [socket (DatagramSocket. port)]

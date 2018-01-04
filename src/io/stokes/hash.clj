@@ -4,7 +4,7 @@
 (defn of-seq [data]
   "of-seq expects data to have some canonical ordering:"
   (-> data
-      str
+      pr-str
       digest/sha-256
       digest/sha-256))
 
@@ -19,7 +19,7 @@
     (of-seq data)))
 
 (defn- make-node [[left right]]
-  {:hash (of (str (left :hash) (right :hash)))
+  {:hash (of (map :hash [left right]))
    :left left
    :right right})
 

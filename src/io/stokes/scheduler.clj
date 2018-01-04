@@ -4,7 +4,6 @@
             [io.stokes.p2p :as p2p]
             [io.stokes.miner :as miner]
             [io.stokes.state :as state]
-            [io.stokes.block :as block]
             [io.stokes.queue :as queue]))
 
 (defn- cancel-miner [miner]

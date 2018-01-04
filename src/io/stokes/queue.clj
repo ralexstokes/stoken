@@ -1,8 +1,5 @@
 (ns io.stokes.queue
-  (:require [clojure.core.async :as async]
-            [com.stuartsierra.component :as component]
-            [io.stokes.state :as state]
-            [io.stokes.p2p :as p2p]))
+  (:require [clojure.core.async :as async]))
 
 (defn new []
   (async/chan))
