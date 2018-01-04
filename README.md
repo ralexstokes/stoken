@@ -12,7 +12,7 @@ The node state contains a transaction pool of outstanding transactions submitted
 
 ## Development
 
-This software uses the [Component framework](https://github.com/stuartsierra/component) to take advantage of the [reloaded](https://github.com/stuartsierra/reloaded) workflow. See (http://thinkrelevance.com/blog/2013/06/04/clojure-workflow-reloaded)[http://thinkrelevance.com/blog/2013/06/04/clojure-workflow-reloaded] for details.
+This software uses the [Component framework](https://github.com/stuartsierra/component) to take advantage of the [reloaded](https://github.com/stuartsierra/reloaded) workflow. See [http://thinkrelevance.com/blog/2013/06/04/clojure-workflow-reloaded](http://thinkrelevance.com/blog/2013/06/04/clojure-workflow-reloaded) for details.
 
 To begin an instance of the development system described in `dev/dev.clj`, open a REPL and call `(reset)`.
 
