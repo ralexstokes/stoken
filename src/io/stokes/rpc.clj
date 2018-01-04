@@ -22,7 +22,7 @@
                     {:body (prn-str balances)}))
    (compojure/GET "/blockchain" [req]
                   (let [chain (state/->best-chain state)]
-                    {:body (prn-str (map block/serialize chain))}))
+                    {:body (prn-str (map block/readable chain))}))
    (compojure/GET "/transactions" [req]
                   (let [transaction-pool (state/->transactions state)]
                     {:body (prn-str transaction-pool)}))

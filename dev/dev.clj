@@ -42,7 +42,7 @@
 (def genesis-block
   (miner/mine-until-sealed [] (transaction-pool/new {})))
 
-(def genesis-string (pr-str (block/serialize genesis-block)))
+(def genesis-string (pr-str (block/readable genesis-block)))
 
 (defn mock-transaction []
   (transaction/from (rand/hex 8) (rand/hex 8) 50 (-> (rand)

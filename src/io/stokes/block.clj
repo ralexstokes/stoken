@@ -1,8 +1,8 @@
 (ns io.stokes.block
   (:require [io.stokes.hash :as hash]
             [digest]
-            [clj-time.coerce :as coerce]
-            [clj-time.core :as time])
+            [clj-time.core :as time]
+            [clj-time.coerce :as coerce])
   (:refer-clojure :exclude [hash]))
 
 (defn difficulty [block]
@@ -11,10 +11,15 @@
 (defn height [block]
   (get block :height 0))
 
+(defn readable [block]
+  "returns a human-readable description of the block"
+  (assoc block :time (coerce/to-date (:time block))))
+
 (def target-blocktime 10000) ;; milliseconds
 
 (defn- timestamps->blocktimes [[a b]]
-  (- a b))
+  (time/in-seconds
+   (time/interval b a)))
 
 (defn- average [seq]
   (let [n (count seq)
@@ -23,14 +28,15 @@
 
 (defn- calculate-average-blocktime [timestamps]
   "if there is not enough data in timestamps to generate an average we just return the target blocktime"
-  (let [blocktimes (->> timestamps
-                        reverse
-                        (take 4)
-                        (partition 2)
-                        (map timestamps->blocktimes))]
-    (if (= 0 (count blocktimes))
+  (let [window 4
+        count-pairs (/ (count timestamps) 2)]
+    (if (< count-pairs window)
       target-blocktime
-      (average blocktimes))))
+      (average (->> timestamps
+                    reverse
+                    (take 4)
+                    (partition 2)
+                    (map timestamps->blocktimes))))))
 
 (defn- calculate-difficulty [block timestamps]
   "adjust difficulty so that the average time between blocks is N seconds"
@@ -76,14 +82,6 @@
 (defn add-to-chain [blockchain block]
   ;; TODO handle reorgs, etc.
   (conj blockchain block))
-
-(defn serialize [block]
-  "work around limitations of clj-time object"
-  (assoc block :time (coerce/to-date (:time block))))
-
-(defn deserialize [block]
-  "work around limitations of clj-time object"
-  (assoc block :time (coerce/from-date (:time block))))
 
 (defn best-chain [blockchain]
   ;; TODO find workiest chain
