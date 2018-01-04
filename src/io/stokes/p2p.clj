@@ -69,7 +69,7 @@
   default)
 
 (defn send-block [p2p block]
-  (println "publishing new block to peers!!!"))
+  (println "publishing new block to peers!!!" block))
   ;; (send p2p block))
 
 (defn send-transaction [p2p transaction]
