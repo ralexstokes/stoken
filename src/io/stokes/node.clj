@@ -13,9 +13,9 @@
   "constructs an instance of the system ready to run given the config"
   (component/system-map
    :config config
+   :state (state/new config)
    :queue (queue/new)
    :rpc (rpc/new rpc)
    :p2p (p2p/new p2p)
-   :miner (atom nil)
-   :scheduler (scheduler/new scheduler)
-   :state (state/new config)))
+   :miner (miner/new miner)
+   :scheduler (scheduler/new scheduler)))

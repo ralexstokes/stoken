@@ -10,22 +10,15 @@
   (when-let [cancel @miner]
     (async/close! cancel)))
 
-(defn- run-miner [queue miner chain]
-  (let [cancel (async/chan)
-        ;; TODO pick a better ceiling?
-        seed (rand-int 10000000)]
+(defn- run-miner [queue miner chain transaction-pool]
+  (let [cancel (async/chan)]
     (async/go-loop []
       (let [[_ channel] (async/alts! [cancel] :default :continue)]
         (when-not (= channel cancel)
-          (when-let [block (miner/mine chain seed 250)]
-            (queue/submit-block queue block))
-          (recur))))
+          (if-let [block (miner/mine chain transaction-pool)]
+            (queue/submit-block queue block)
+            (recur)))))
     (reset! miner cancel)))
-
-(defn- query-state-from-peers [queue p2p]
-  (async/go
-    (let [inventory (p2p/query-inventory p2p)]
-      (queue/submit-inventory queue inventory))))
 
 (defmulti dispatch queue/dispatch)
 
@@ -39,12 +32,14 @@
   (p2p/send-transaction p2p transaction))
 
 (defmethod dispatch :inventory [_ {:keys [queue p2p]}]
-  (query-state-from-peers queue p2p))
+  (let [inventory (p2p/query-inventory p2p)]
+    (queue/submit-inventory queue inventory)))
 
 (defmethod dispatch :mine [_ {:keys [state queue miner]}]
   (cancel-miner miner)
-  (let [chain (state/->best-chain state)]
-    (run-miner queue miner chain)))
+  (let [chain (state/->best-chain state)
+        pool (state/->transactions state)]
+    (run-miner queue miner chain pool)))
 
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))

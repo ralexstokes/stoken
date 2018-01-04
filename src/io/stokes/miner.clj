@@ -33,52 +33,41 @@
   (let [threshold (calculate-threshold difficulty)
         hash (hex->bignum hash)
         result (.compareTo hash threshold)]
-    (<= result 0)))
+    (not (pos? result))))
 
-(defn- increment-nonce [block]
-  ;; TODO fill in ALL fields of block, w/ nonce at 0
-  ;; TODO only take header to hash over
-  (let [next (update block :nonce inc)]
-    (assoc next :hash (hash/of next))))
+(defn- prepare-block [block nonce]
+  (let [block (assoc block :nonce nonce)]
+    (assoc block :hash (block/hash block))))
 
-(defn mine-range [number-of-nonces block]
-  (loop [count number-of-nonces
-         block block]
+(defn- mine-range [block seed number-of-rounds]
+  (loop [count number-of-rounds
+         nonce seed]
     (when (pos? count)
-      (if (sealed? block)
-        (assoc block :time (time/now))
-        (recur (dec count)
-               (increment-nonce block))))))
+      (let [block (prepare-block block nonce)]
+        (if (sealed? block)
+          block
+          (recur (dec count)
+                 (inc nonce)))))))
 
-(defn- build-next-block [blockchain transaction-pool]
-  (let [timestamps (map :time blockchain)
-        transactions (transaction-pool/take-by-fee transaction-pool 5)]
-    (block/from transactions (peek blockchain) timestamps)))
+(defn- select-transactions [pool]
+  (transaction-pool/take-by-fee pool 20))
 
-(defn mine-for-nonces [{:keys [number-of-nonces blockchain transaction-pool]}]
-  (let [seed 0
-        next-block (build-next-block blockchain transaction-pool)]
-    (mine-range number-of-nonces (assoc next-block :nonce seed))))
+(defn- derive-next-block [chain transaction-pool]
+  (let [transactions (select-transactions transaction-pool)]
+    (block/next-template chain transactions)))
 
-(defn mine [chain seed number-of-rounds]
-  (let [block (last chain)]
-    (Thread/sleep 500)
-    (if (zero? (mod (rand-int 100) 10))
-      (assoc block :nonce seed)
-      nil)))
+(defn mine [chain transaction-pool & {:keys [number-of-rounds] :or {number-of-rounds 250}}]
+  (let [seed (rand-int 10000000) ;; TODO pick a better ceiling?
+        next-block (derive-next-block chain transaction-pool)]
+    (mine-range next-block seed number-of-rounds)))
 
-;; (defrecord ProofOfWork [number-of-rounds state queue]
-;;   component/Lifecycle
-;;   (start [miner]
-;;     (println "starting miner...")
-;;     (assoc miner :stop (start-mining number-of-rounds state queue)))
-;;   (stop [miner]
-;;     (println "stopping miner...")
-;;     (when-let [stop (:stop miner)]
-;;       (stop))
-;;     (dissoc miner :stop)))
+(defn mine-until-sealed [chain transaction-pool]
+  (loop [block (mine chain transaction-pool)]
+    (if block
+      block
+      (recur (mine chain transaction-pool)))))
 
-;; (defn new [config]
-;;   (component/using
-;;    (map->ProofOfWork (assoc config :queue (async/chan)))
-;;    [:state]))
+(defn new [config]
+  ;; TODO add coinbase address to config
+  ;; TODO number-of-rounds config
+  (atom nil))

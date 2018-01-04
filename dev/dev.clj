@@ -31,7 +31,8 @@
    [io.stokes.miner :as miner]
    [io.stokes.state :as state]
    [io.stokes.queue :as queue]
-   [io.stokes.hash :as hash]))
+   [io.stokes.hash :as hash]
+   [io.stokes.transaction-pool :as transaction-pool]))
 
 (def pp pprint)
 
@@ -39,11 +40,9 @@
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src" "test")
 
 (def genesis-block
-  (let [block (block/from [] {:height     -1
-                              :difficulty  1} [])]
-    (miner/mine-range 100000 block)))
+  (miner/mine-until-sealed [] (transaction-pool/new {})))
 
-(def genesis-string (prn-str (block/serialize genesis-block)))
+(def genesis-string (pr-str (block/serialize genesis-block)))
 
 (defn mock-transaction []
   (transaction/from (rand/hex 8) (rand/hex 8) 50 (-> (rand)
