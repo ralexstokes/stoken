@@ -2,8 +2,7 @@
   (:require [io.stokes.hash :as hash]
             [digest]
             [clj-time.coerce :as coerce]
-            [clj-time.core :as time]
-            [io.stokes.block :as block])
+            [clj-time.core :as time])
   (:refer-clojure :exclude [hash]))
 
 (defn difficulty [block]
