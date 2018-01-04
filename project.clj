@@ -1,6 +1,6 @@
 (defproject io.stokes/stoken "0.1.0-SNAPSHOT"
-  :description "TODO"
-  :url "TODO"
+  :description "a simple proof-of-work blockchain"
+  :url "github.com/ralexstokes/stoken"
   :license {:name "TODO: Choose a license"
             :url "http://choosealicense.com/"}
   :dependencies [[org.clojure/clojure "1.8.0"]
