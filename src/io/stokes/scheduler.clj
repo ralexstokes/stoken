@@ -54,12 +54,8 @@
     stop))
 
 (defn- start-workers [{:keys [number-of-workers] :as scheduler}]
-  (loop [workers []
-         count number-of-workers]
-    (if (zero? count)
-      workers
-      (recur (conj workers (start-worker scheduler))
-             (dec count)))))
+  (doall
+   (map (fn [_] (start-worker scheduler)) (range number-of-workers))))
 
 (defn- stop-worker [worker]
   (async/close! worker))
