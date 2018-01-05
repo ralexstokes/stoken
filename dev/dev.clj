@@ -39,8 +39,15 @@
 ;; Do not try to load source code from 'resources' directory
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src" "test")
 
+(defn mine-until-sealed [chain transaction-pool]
+  (let [miner {:coinbase "0xdeadbeefcafe"}]
+    (loop [block (miner/mine miner chain transaction-pool)]
+      (if block
+        block
+        (recur (miner/mine miner chain transaction-pool))))))
+
 (def genesis-block
-  (miner/mine-until-sealed [] (transaction-pool/new {})))
+  (mine-until-sealed [] (transaction-pool/new {})))
 
 (def genesis-string (pr-str (block/readable genesis-block)))
 
@@ -57,12 +64,15 @@
                 (assoc to   10000)
                 (assoc from 10000))) {} transactions))
 
+(def mock-address "0xdeadbeefcafe")
+
 (defn- config-with-transactions [transactions]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
    :p2p              {:port 8888}
    :scheduler        {:number-of-workers 1}
-   :miner            {:number-of-rounds 1000}
+   :miner            {:number-of-rounds 1000
+                      :coinbase mock-address}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (ledger-state transactions)}})

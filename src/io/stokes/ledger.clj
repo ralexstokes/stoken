@@ -2,8 +2,8 @@
 
 (defn- apply-transaction [ledger {:keys [from to amount]}]
   (-> ledger
-      (update from #(- % amount))
-      (update to #(+ % amount))))
+      (update from #(- (or % 0) amount))
+      (update to #(+ (or % 0) amount))))
 
 (defn apply-transactions [ledger transactions]
   (reduce apply-transaction ledger transactions))
@@ -13,4 +13,5 @@
   (into {} initial-state))
 
 (defn balances [ledger]
+  ;; TODO filter out the zero address
   ledger)

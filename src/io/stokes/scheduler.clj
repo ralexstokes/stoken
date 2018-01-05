@@ -6,19 +6,19 @@
             [io.stokes.state :as state]
             [io.stokes.queue :as queue]))
 
-(defn- cancel-miner [miner]
-  (when-let [cancel @miner]
+(defn- cancel-miner [{:keys [channel]}]
+  (when-let [cancel @channel]
     (async/close! cancel)))
 
-(defn- run-miner [queue miner chain transaction-pool]
+(defn- run-miner [queue {:keys [channel] :as miner} chain transaction-pool]
   (let [cancel (async/chan)]
     (async/go-loop []
       (let [[_ channel] (async/alts! [cancel] :default :continue)]
         (when-not (= channel cancel)
-          (if-let [block (miner/mine chain transaction-pool)]
+          (if-let [block (miner/mine miner chain transaction-pool)]
             (queue/submit-block queue block)
             (recur)))))
-    (reset! miner cancel)))
+    (reset! channel cancel)))
 
 (defmulti dispatch queue/dispatch)
 
