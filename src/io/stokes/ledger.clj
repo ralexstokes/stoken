@@ -1,4 +1,5 @@
-(ns io.stokes.ledger)
+(ns io.stokes.ledger
+  (:require [io.stokes.address :as address]))
 
 (defn- apply-transaction [ledger {:keys [from to amount]}]
   (-> ledger
@@ -13,5 +14,4 @@
   (into {} initial-state))
 
 (defn balances [ledger]
-  ;; TODO filter out the zero address
-  ledger)
+  (filter (fn [[address balance]] (not= address address/zero))) ledger)

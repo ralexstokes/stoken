@@ -45,7 +45,7 @@
   (transaction-pool/take-by-fee pool 20))
 
 (defn- build-coinbase-transaction [address subsidy]
-  (transaction/from (address/zero) address subsidy 0))
+  (transaction/from address/zero address subsidy 0))
 
 (defn- derive-next-block [chain transactions]
   (block/next-template chain transactions))
