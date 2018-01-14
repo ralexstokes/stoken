@@ -28,8 +28,7 @@
     (< hash threshold)))
 
 (defn- prepare-block [block nonce]
-  (let [block (assoc block :nonce nonce)]
-    (assoc block :hash (block/hash block))))
+  (assoc block :nonce nonce))
 
 (defn- mine-range [block seed number-of-rounds max-threshold]
   (loop [count number-of-rounds
