@@ -6,11 +6,11 @@
             [clj-time.coerce :as coerce])
   (:refer-clojure :exclude [hash]))
 
-(def block-header-keys #{:previous-hash
-                         :difficulty
-                         :transaction-root
-                         :time
-                         :nonce})
+(def ^:private block-header-keys #{:previous-hash
+                                   :difficulty
+                                   :transaction-root
+                                   :time
+                                   :nonce})
 
 (defn header [block]
   (select-keys block block-header-keys))
@@ -31,7 +31,7 @@
   [block]
   (assoc block :time (coerce/to-date (:time block))))
 
-(def target-blocktime 10000) ;; milliseconds
+(def ^:private target-blocktime 10000) ;; milliseconds
 
 (defn- timestamps->blocktimes [[a b]]
   (time/in-seconds

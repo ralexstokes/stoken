@@ -11,9 +11,9 @@
 (defn- empty-packet [n]
   (DatagramPacket. (byte-array n) n))
 
-;; (def localhost (.getLocalHost InetAddress))
-(def localhost "localhost")
-(def packet-size 512)
+;; (def ^:private localhost (.getLocalHost InetAddress))
+(def ^:private localhost "localhost")
+(def ^:private packet-size 512)
 
 (defn- msg-of [host port msg]
   (let [str (prn-str msg)

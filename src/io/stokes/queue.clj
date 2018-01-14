@@ -4,7 +4,7 @@
 (defn new []
   (async/chan))
 
-(def tag :tag)
+(def ^:private tag :tag)
 
 (defn dispatch [msg & rest]
   (tag msg))
