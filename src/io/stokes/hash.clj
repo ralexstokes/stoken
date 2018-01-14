@@ -39,7 +39,7 @@
 (defn- make-even [seq]
   (if (= 0 (mod (count seq) 2))
     seq
-    (concat seq (repeat 1 (last seq)))))
+    (conj seq (last seq))))
 
 (defn tree-of [data]
   "builds a binary Merkle tree out of the seq `data`"
