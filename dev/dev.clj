@@ -109,10 +109,9 @@
 
 (set-init (fn [_] (dev-system)))
 
-
 ;; some convenience functions for the REPL
 
-(defn b [system] (first (state/->best-chain (:state system))))
+(defn chain [system] (state/->best-chain (:state system)))
 
 (defn read-n-messages [p2p n]
   (future (loop [count 0]
