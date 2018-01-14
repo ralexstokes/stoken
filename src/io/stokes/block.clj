@@ -1,6 +1,7 @@
 (ns io.stokes.block
   (:require [io.stokes.hash :as hash]
             [digest]
+            [clojure.set :as set]
             [clj-time.core :as time]
             [clj-time.coerce :as coerce])
   (:refer-clojure :exclude [hash]))
@@ -124,5 +125,9 @@
 
 (defn next-template [chain transactions]
   "generates a block with `transactions` that satisfies the constraints to be appended to the chain modulo a valid proof-of-work, i.e. a nonce that satisfies the difficulty in the block, also implies a missing block hash in the returned data. note: timestamp in the block header is currently included in the hash pre-image; given that a valid block must be within some time interval, client code MUST refresh this timestamp as needed; if you are having issues, run the proof-of-work routine for a smaller number of rounds"
+  {:post [(let [keys (->> %
+                          keys
+                          (into #{}))]
+            (set/subset? block-header-keys keys))]}
   (merge {:transactions transactions}
          (header-from chain transactions)))
