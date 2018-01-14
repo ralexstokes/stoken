@@ -48,8 +48,9 @@
 (def max-threshold-str-easy
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
-(defn- max-threshold [str]
+(defn- max-threshold
   "maximum threshold used in Bitcoin; https://en.bitcoin.it/wiki/Target"
+  [str]
   (hex->bignum str))
 
 (defn mine-until-sealed [chain transaction-pool]

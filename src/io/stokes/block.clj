@@ -26,8 +26,9 @@
 (defn previous [block]
   (:previous-hash block))
 
-(defn readable [block]
+(defn readable
   "returns a human-readable description of the block"
+  [block]
   (assoc block :time (coerce/to-date (:time block))))
 
 (def target-blocktime 10000) ;; milliseconds
@@ -41,8 +42,9 @@
         sum (reduce + seq)]
     (/ sum n)))
 
-(defn- calculate-average-blocktime [timestamps]
+(defn- calculate-average-blocktime
   "if there is not enough data in timestamps to generate an average we just return the target blocktime"
+  [timestamps]
   (let [window 4
         count-pairs (/ (count timestamps) 2)]
     (if (< count-pairs window)
@@ -53,8 +55,9 @@
                     (partition 2)
                     (map timestamps->blocktimes))))))
 
-(defn- calculate-difficulty [block timestamps]
+(defn- calculate-difficulty
   "adjust difficulty so that the average time between blocks is N seconds"
+  [block timestamps]
   (let [difficulty (difficulty block)
         average-blocktime (calculate-average-blocktime timestamps)
         next        (cond (> average-blocktime target-blocktime) dec
@@ -123,8 +126,9 @@
      :time             (time/now)
      :nonce            0}))
 
-(defn next-template [chain transactions]
+(defn next-template
   "generates a block with `transactions` that satisfies the constraints to be appended to the chain modulo a valid proof-of-work, i.e. a nonce that satisfies the difficulty in the block, also implies a missing block hash in the returned data. note: timestamp in the block header is currently included in the hash pre-image; given that a valid block must be within some time interval, client code MUST refresh this timestamp as needed; if you are having issues, run the proof-of-work routine for a smaller number of rounds"
+  [chain transactions]
   {:post [(let [keys (->> %
                           keys
                           (into #{}))]

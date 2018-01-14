@@ -19,8 +19,9 @@
 (defn- hex->bignum [str]
   (BigInteger. str 16))
 
-(defn- sealed? [block max-threshold]
+(defn- sealed?
   "a proof-of-work block is sealed when the block hash is less than a threshold determined by the difficulty"
+  [block max-threshold]
   (let [threshold (calculate-threshold max-threshold (block/difficulty block))
         hash (-> block
                  block/hash

@@ -1,15 +1,17 @@
 (ns io.stokes.hash
   (:require [digest]))
 
-(defn of-seq [data]
+(defn of-seq
   "of-seq expects data to have some canonical ordering:"
+  [data]
   (-> data
       pr-str
       digest/sha-256
       digest/sha-256))
 
-(defn- associative->sequential [data]
+(defn- associative->sequential
   "e.g. turn a map into a sequence sorted by key's value"
+  [data]
   (let [keys (sort (keys data))]
     (reduce #(conj %1 [%2 (data %2)]) [] keys)))
 
@@ -41,14 +43,16 @@
     seq
     (conj seq (last seq))))
 
-(defn tree-of [data]
+(defn tree-of
   "builds a binary Merkle tree out of the seq `data`"
+  [data]
   (when (seq data)
     (let [leaves (->> data
                       (make-even)
                       (map make-leaf))]
       (build-tree leaves))))
 
-(defn root-of [hash-tree]
+(defn root-of
   "returns the root hash of a Merkle tree as produced by `tree-of`"
+  [hash-tree]
   (get hash-tree :hash (of "")))

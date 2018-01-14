@@ -9,8 +9,9 @@
    [com.stuartsierra.component :as component]
    [clojure.core.async :as async]))
 
-(defn from [{:keys [rpc p2p miner scheduler] :as config}]
+(defn from
   "constructs an instance of the system ready to run given the config"
+  [{:keys [rpc p2p miner scheduler] :as config}]
   (component/system-map
    :config config
    :state (state/new config)
