@@ -4,10 +4,10 @@
 (defn of-seq
   "of-seq expects data to have some canonical ordering:"
   [data]
-  (-> data
-      pr-str
-      digest/sha-256
-      digest/sha-256))
+  (some-> data
+          pr-str
+          digest/sha-256
+          digest/sha-256))
 
 (defn- associative->sequential
   "e.g. turn a map into a sequence sorted by key's value"
@@ -16,9 +16,11 @@
     (reduce #(conj %1 [%2 (data %2)]) [] keys)))
 
 (defn of [data]
-  (if (associative? data)
-    (of-seq (associative->sequential data))
-    (of-seq data)))
+  (of-seq
+   (seq
+    (if (associative? data)
+      (associative->sequential data)
+      data))))
 
 (defn- make-node [[left right]]
   {:hash (of (map :hash [left right]))
