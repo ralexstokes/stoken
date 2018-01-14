@@ -13,39 +13,30 @@
   (and (block :hash)
        block))
 
+(defn- calculate-threshold [max-threshold difficulty]
+  (.shiftRight max-threshold difficulty))
+
 (defn- hex->bignum [str]
   (BigInteger. str 16))
 
-;; (def max-threshold-str
-;;   "00000000FFFF0000000000000000000000000000000000000000000000000000")
-
-(def max-threshold-str
-  "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-
-(def max-threshold
-  "maximum threshold used in Bitcoin; https://en.bitcoin.it/wiki/Target"
-  (hex->bignum max-threshold-str))
-
-(defn- calculate-threshold [difficulty]
-  (.shiftRight max-threshold difficulty))
-
-(defn- sealed? [{:keys [hash difficulty]}]
+(defn- sealed? [block max-threshold]
   "a proof-of-work block is sealed when the block hash is less than a threshold determined by the difficulty"
-  (let [threshold (calculate-threshold difficulty)
-        hash (hex->bignum hash)
-        result (.compareTo hash threshold)]
-    (not (pos? result))))
+  (let [threshold (calculate-threshold max-threshold (block/difficulty block))
+        hash (-> block
+                 block/hash
+                 hex->bignum)]
+    (< hash threshold)))
 
 (defn- prepare-block [block nonce]
   (let [block (assoc block :nonce nonce)]
     (assoc block :hash (block/hash block))))
 
-(defn- mine-range [block seed number-of-rounds]
+(defn- mine-range [block seed number-of-rounds max-threshold]
   (loop [count number-of-rounds
          nonce seed]
     (when (pos? count)
       (let [block (prepare-block block nonce)]
-        (if (sealed? block)
+        (if (sealed? block max-threshold)
           block
           (recur (dec count)
                  (inc nonce)))))))
@@ -59,14 +50,14 @@
 (defn- derive-next-block [chain transactions]
   (block/next-template chain transactions))
 
-(defn mine [{:keys [number-of-rounds coinbase] :or {number-of-rounds 250}} chain transaction-pool]
+(defn mine [{:keys [number-of-rounds coinbase max-threshold] :or {number-of-rounds 250}} chain transaction-pool]
   (let [seed (rand-int 10000000) ;; TODO pick a better ceiling?
         subsidy 100 ;; TODO calculate subsidy
         transactions (select-transactions transaction-pool)
         coinbase-transaction (build-coinbase-transaction coinbase subsidy)
         next-block (derive-next-block chain (concat [coinbase-transaction]
                                                     transactions))]
-    (mine-range next-block seed number-of-rounds)))
+    (mine-range next-block seed number-of-rounds max-threshold)))
 
 (defn new [config]
   (merge config {:channel (atom nil)}))

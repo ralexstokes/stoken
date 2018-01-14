@@ -44,7 +44,7 @@
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))
 
-(defn- start-worker [{:keys [queue miner] :as scheduler}]
+(defn- start-worker [{:keys [queue] :as scheduler}]
   (let [stop (async/chan)]
     (async/go-loop [[msg channel] (async/alts! [stop queue])]
       (when-not (= channel stop)
@@ -70,10 +70,11 @@
 (defn- begin-mining [queue]
   (queue/submit-request-to-mine queue))
 
-(defn- start [{:keys [queue state miner] :as scheduler}]
+(defn- start [{:keys [queue node-should-mine?] :as scheduler}]
   (let [workers (start-workers scheduler)]
     (query-peers queue)
-    (begin-mining queue)
+    (when node-should-mine?
+      (begin-mining queue))
     workers))
 
 (defrecord Scheduler [state queue p2p miner]

@@ -39,8 +39,22 @@
 ;; Do not try to load source code from 'resources' directory
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src" "test")
 
+(defn- hex->bignum [str]
+  (BigInteger. str 16))
+
+(def max-threshold-str-hard
+  "00000000FFFF0000000000000000000000000000000000000000000000000000")
+
+(def max-threshold-str-easy
+  "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+
+(defn- max-threshold [str]
+  "maximum threshold used in Bitcoin; https://en.bitcoin.it/wiki/Target"
+  (hex->bignum str))
+
 (defn mine-until-sealed [chain transaction-pool]
-  (let [miner {:coinbase "0xdeadbeefcafe"}]
+  (let [miner {:coinbase "0xdeadbeefcafe"
+               :max-threshold (max-threshold max-threshold-str-easy)}]
     (loop [block (miner/mine miner chain transaction-pool)]
       (if block
         block
@@ -66,20 +80,27 @@
 
 (def mock-address "0xdeadbeefcafe")
 
-(defn- config-with-transactions [transactions]
+(defn- config [transactions mine? easy-mining?]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
    :p2p              {:port 8888}
-   :scheduler        {:number-of-workers 1}
+   :scheduler        {:number-of-workers 1
+                      :node-should-mine? mine?}
    :miner            {:number-of-rounds 1000
-                      :coinbase mock-address}
+                      :coinbase mock-address
+                      :max-threshold (max-threshold (if easy-mining?
+                                                      max-threshold-str-easy
+                                                      max-threshold-str-hard))}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (ledger-state transactions)}})
 
+;; convenience flags for development
+(def transactions [])
+(def mine? false)
+(def easy-mining? true)
 
-(def dev-config (config-with-transactions []))
-(def dev-config-with-transactions (config-with-transactions mock-transactions))
+(def dev-config (config transactions mine? easy-mining?))
 
 (defn dev-system
   "Constructs a system map suitable for interactive development."
