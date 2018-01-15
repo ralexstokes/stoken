@@ -23,7 +23,7 @@
 (defn difficulty [block]
   (get block :difficulty 0))
 
-(defn previous [block]
+(defn- previous [block]
   (:previous-hash block))
 
 (defn readable
