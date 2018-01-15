@@ -50,8 +50,8 @@
 (defn- derive-next-block [chain transactions]
   (block/next-template chain transactions))
 
-(defn mine [{:keys [number-of-rounds coinbase max-threshold] :or {number-of-rounds 250}} chain transaction-pool]
-  (let [seed (rand-int 10000000) ;; TODO pick a better ceiling?
+(defn mine [{:keys [number-of-rounds coinbase max-threshold max-seed] :or {number-of-rounds 250}} chain transaction-pool]
+  (let [seed (rand-int max-seed)
         subsidy 100 ;; TODO calculate subsidy
         transactions (select-transactions transaction-pool)
         coinbase-transaction (build-coinbase-transaction coinbase subsidy)

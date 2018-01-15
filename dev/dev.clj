@@ -91,7 +91,8 @@
                       :coinbase mock-address
                       :max-threshold (max-threshold (if easy-mining?
                                                       max-threshold-str-easy
-                                                      max-threshold-str-hard))}
+                                                      max-threshold-str-hard))
+                      :max-seed 1000000}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (ledger-state transactions)}})
