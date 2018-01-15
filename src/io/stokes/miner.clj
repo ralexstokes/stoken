@@ -29,7 +29,7 @@
     (< hash threshold)))
 
 (defn- prepare-block [block nonce]
-  (assoc block :nonce nonce))
+  (block/with-nonce block nonce))
 
 (defn- mine-range [block seed number-of-rounds max-threshold]
   (loop [count number-of-rounds

@@ -26,6 +26,9 @@
 (defn- previous [block]
   (:previous-hash block))
 
+(defn with-nonce [block nonce]
+  (assoc block :nonce nonce))
+
 (defn readable
   "returns a human-readable description of the block"
   [block]
