@@ -31,6 +31,28 @@
   [block]
   (assoc block :time (coerce/to-date (:time block))))
 
+
+(defn- header-from [chain transactions]
+  (let [previous-block (last chain)
+        block-timestamps (map :time chain)]
+    {:previous-hash    (hash previous-block)
+     :difficulty       (calculate-difficulty previous-block block-timestamps)
+     :transaction-root (-> transactions
+                           hash/tree-of
+                           hash/root-of)
+     :time             (time/now)
+     :nonce            0}))
+
+(defn next-template
+  "generates a block with `transactions` that satisfies the constraints to be appended to the chain modulo a valid proof-of-work, i.e. a nonce that satisfies the difficulty in the block, also implies a missing block hash in the returned data. note: timestamp in the block header is currently included in the hash pre-image; given that a valid block must be within some time interval, client code MUST refresh this timestamp as needed; if you are having issues, run the proof-of-work routine for a smaller number of rounds"
+  [chain transactions]
+  {:post [(let [keys (->> %
+                          keys
+                          (into #{}))]
+            (set/subset? block-header-keys keys))]}
+  (merge {:transactions transactions}
+         (header-from chain transactions)))
+
 (def ^:private target-blocktime 10000) ;; milliseconds
 
 (defn- timestamps->blocktimes [[a b]]
@@ -114,24 +136,3 @@
 
 (defn chain-from [{genesis-block :initial-state}]
   (node-of genesis-block))
-
-(defn- header-from [chain transactions]
-  (let [previous-block (last chain)
-        block-timestamps (map :time chain)]
-    {:previous-hash    (hash previous-block)
-     :difficulty       (calculate-difficulty previous-block block-timestamps)
-     :transaction-root (-> transactions
-                           hash/tree-of
-                           hash/root-of)
-     :time             (time/now)
-     :nonce            0}))
-
-(defn next-template
-  "generates a block with `transactions` that satisfies the constraints to be appended to the chain modulo a valid proof-of-work, i.e. a nonce that satisfies the difficulty in the block, also implies a missing block hash in the returned data. note: timestamp in the block header is currently included in the hash pre-image; given that a valid block must be within some time interval, client code MUST refresh this timestamp as needed; if you are having issues, run the proof-of-work routine for a smaller number of rounds"
-  [chain transactions]
-  {:post [(let [keys (->> %
-                          keys
-                          (into #{}))]
-            (set/subset? block-header-keys keys))]}
-  (merge {:transactions transactions}
-         (header-from chain transactions)))
