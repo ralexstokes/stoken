@@ -55,7 +55,8 @@
 
 (defn mine-until-sealed [chain transaction-pool]
   (let [miner {:coinbase "0xdeadbeefcafe"
-               :max-threshold (max-threshold max-threshold-str-easy)}]
+               :max-threshold (max-threshold max-threshold-str-easy)
+               :max-seed 1000000}]
     (loop [block (miner/mine miner chain transaction-pool)]
       (if block
         block
