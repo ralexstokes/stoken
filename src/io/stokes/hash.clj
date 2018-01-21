@@ -1,28 +1,21 @@
 (ns io.stokes.hash
   (:require [secp256k1.hashes :as digest]))
 
-(defn of-seq
-  "of-seq expects data to have some canonical ordering:"
-  [data]
-  (some-> data
-          pr-str
-          digest/sha256
-          digest/sha256
-          java.math.BigInteger.
-          (.toString 16)))
+(defn of-byte-array [ba]
+  (-> ba
+      digest/sha256
+      digest/sha256
+      java.math.BigInteger.
+      .abs
+      (.toString 16)))
 
-(defn- associative->sequential
-  "e.g. turn a map into a sequence sorted by key's value"
+(defn of
+  "returns the hash of `data`. NOTE: this function may not return the same hash for two different instances of `data` that are `=`. This fact is a known bug."
   [data]
-  (let [keys (sort (keys data))]
-    (reduce #(conj %1 [%2 (data %2)]) [] keys)))
-
-(defn of [data]
-  (of-seq
-   (seq
-    (if (associative? data)
-      (associative->sequential data)
-      data))))
+  (-> data
+      sort
+      pr-str
+      of-byte-array))
 
 (defn- make-node [[left right]]
   {:hash (of (map :hash [left right]))
