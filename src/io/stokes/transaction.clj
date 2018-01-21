@@ -5,3 +5,6 @@
    :to     to
    :amount amount
    :fee    fee})
+
+(defn fee [transaction]
+  (:fee transaction 0))

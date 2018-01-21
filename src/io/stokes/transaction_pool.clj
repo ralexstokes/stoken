@@ -1,5 +1,6 @@
 (ns io.stokes.transaction-pool
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set]
+            [io.stokes.transaction :as transaction]))
 
 (defn new [{:keys [initial-state]}]
   (into #{} initial-state))
@@ -16,5 +17,5 @@
   "returns `n` transactions from the `pool` preferring those with higher fees"
   [pool n]
   (->> pool
-       (sort-by :fee >)
+       (sort-by transaction/fee >)
        (take n)))
