@@ -50,9 +50,23 @@
 (defn- derive-next-block [chain transactions]
   (block/next-template chain transactions))
 
+(def ^:private halving-frequency
+  "how many blocks occur since the last time the block reward halved"
+  5000)
+
+(def ^:private base-block-reward
+  "the largest block reward that will ever be claimed"
+  128)
+
+(defn- calculate-subsidy [chain]
+  (let [height (count chain)
+        halvings (quot height halving-frequency)]
+    (int (quot base-block-reward
+               (Math/pow 2 halvings)))))
+
 (defn mine [{:keys [number-of-rounds coinbase max-threshold max-seed] :or {number-of-rounds 250}} chain transaction-pool]
   (let [seed (rand-int max-seed)
-        subsidy 100 ;; TODO calculate subsidy
+        subsidy (calculate-subsidy chain)
         transactions (select-transactions transaction-pool)
         coinbase-transaction (build-coinbase-transaction coinbase subsidy)
         next-block (derive-next-block chain (concat [coinbase-transaction]
