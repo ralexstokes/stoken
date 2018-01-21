@@ -1,13 +1,15 @@
 (ns io.stokes.hash
-  (:require [digest]))
+  (:require [secp256k1.hashes :as digest]))
 
 (defn of-seq
   "of-seq expects data to have some canonical ordering:"
   [data]
   (some-> data
           pr-str
-          digest/sha-256
-          digest/sha-256))
+          digest/sha256
+          digest/sha256
+          java.math.BigInteger.
+          (.toString 16)))
 
 (defn- associative->sequential
   "e.g. turn a map into a sequence sorted by key's value"

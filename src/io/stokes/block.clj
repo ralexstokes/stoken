@@ -1,6 +1,5 @@
 (ns io.stokes.block
   (:require [io.stokes.hash :as hash]
-            [digest]
             [clojure.set :as set]
             [clj-time.core :as time]
             [clj-time.coerce :as coerce])

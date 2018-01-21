@@ -32,6 +32,7 @@
    [io.stokes.state :as state]
    [io.stokes.queue :as queue]
    [io.stokes.hash :as hash]
+   [io.stokes.key :as key]
    [io.stokes.transaction-pool :as transaction-pool]))
 
 (def pp pprint)
