@@ -12,6 +12,7 @@
                  [compojure "1.6.0"]
                  [org.clojure/data.json "0.2.6"]
                  [com.github.Sepia-Officinalis/secp256k1 "fd44e1e0d6"]
+                 [rm-hull/base58 "0.1.0"]
                  [com.stuartsierra/component "0.3.2"]]
   :repositories [["jitpack" "https://jitpack.io"]]
   :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]

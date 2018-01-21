@@ -81,7 +81,8 @@
                 (assoc to   10000)
                 (assoc from 10000))) {} transactions))
 
-(def mock-address "0xdeadbeefcafe")
+(def a-key-pair (key/new))
+(def mock-address (key/->address a-key-pair))
 
 (defn- config [transactions mine? easy-mining?]
   {:rpc              {:port 3000

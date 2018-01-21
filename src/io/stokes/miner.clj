@@ -4,7 +4,7 @@
             [io.stokes.block :as block]
             [io.stokes.transaction :as transaction]
             [io.stokes.transaction-pool :as transaction-pool]
-            [io.stokes.address :as address]
+            [io.stokes.key :as key]
             [clojure.core.async :as async]
             [clj-time.core :as time]
             [clj-time.coerce :as coerce]))
@@ -45,7 +45,7 @@
   (transaction-pool/take-by-fee pool 20))
 
 (defn- build-coinbase-transaction [address subsidy]
-  (transaction/from address/zero address subsidy 0))
+  (transaction/from nil address subsidy 0))
 
 (defn- derive-next-block [chain transactions]
   (block/next-template chain transactions))
