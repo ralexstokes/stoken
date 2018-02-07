@@ -6,11 +6,12 @@
 (defn- derive-address
   "performs a computation similar to the Bitcoin address derivation algorithm given a key-pair"
   [keys]
-  (-> keys
-      :public-key
-      .getEncoded
-      hash/of-byte-array
-      base58/encode))
+  (->> keys
+       :public-key
+       .getEncoded
+       hash/of-byte-array
+       (take 20)
+       base58/encode))
 
 (defn new
   "returns a new key pair with derived address"
