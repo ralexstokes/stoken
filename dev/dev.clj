@@ -22,6 +22,7 @@
    [com.stuartsierra.component :as component]
    [com.stuartsierra.component.repl :refer [reset set-init start stop system]]
    [crypto.random :as rand]
+   [udp-wrapper.core :as udp]
    [io.stokes.node :as node]
    [io.stokes.rpc :as rpc]
    [io.stokes.p2p :as p2p]
@@ -71,11 +72,15 @@
 
 (def genesis-string (pr-str (block/readable genesis-block)))
 
+(def seed-node-ip (.getHostAddress (udp/localhost)))
+(def seed-node-port 57177)
 
 (defn- config [transactions blocks-to-mine easy-mining? coinbase seed-node?]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
-   :p2p              {:port 8888}
+   :p2p              {:port (if seed-node? seed-node-port nil)
+                      :seed-node {:ip seed-node-ip
+                                  :port seed-node-port}}
    :scheduler        {:number-of-workers 1
                       :blocks-to-mine blocks-to-mine}
    :miner            {:number-of-rounds 1000
@@ -92,6 +97,7 @@
 (def transactions [])
 (def blocks-to-mine 2)
 (def easy-mining? true)
+(def seed-node? true)
 
 ;; some convenience functions for the REPL
 

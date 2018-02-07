@@ -1,6 +1,11 @@
 (ns io.stokes.p2p
   (:require [com.stuartsierra.component :as component]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [clojure.string :as string]
+            [udp-wrapper.core :as udp]
+            [gossip.core :as gossip]
+            [gossip.utils :as gossip-utils]
+            [io.stokes.queue :as queue])
   (:refer-clojure :exclude [send])
   (:import (java.net InetAddress
                      InetSocketAddress
@@ -8,74 +13,94 @@
                      DatagramSocket
                      SocketException)))
 
-(defn- empty-packet [n]
-  (DatagramPacket. (byte-array n) n))
+(defn- create-node [ip port]
+  (ref (gossip/create-node ip port)))
 
-;; (def ^:private localhost (.getLocalHost InetAddress))
-(def ^:private localhost "localhost")
+(def ^:private ip (.getHostAddress (udp/localhost)))
 (def ^:private packet-size 512)
 
-(defn- msg-of [host port msg]
-  (let [str (prn-str msg)
-        payload (.getBytes str)
-        length (min (alength payload) packet-size)
-        address (InetSocketAddress. host port)]
-    (DatagramPacket. payload
-                     length
-                     address)))
+(defn- create-gossip-node
+  "constructs a node for use in the gossip network. allows for specification of a certain port (intended for seed nodes) and otherwise uses an ephemeral port on the local machine"
+  [port]
+  (let [socket (if port
+                 (DatagramSocket. port)
+                 (DatagramSocket.))]
+    {:node (create-node ip (.getLocalPort socket))
+     :socket socket}))
 
-(defn- send [{:keys [socket port]} msg]
-  (.send socket (msg-of localhost port msg)))
+(defn- configure-node [socket node]
+  (gossip/schedule-heartbeat-send socket node (* 1000 60 5))
+  (gossip/schedule-heartbeat-dec socket node (* 1000 60 5)))
 
-(defn- recieve-from [socket]
-  (let [packet (empty-packet packet-size)]
-    (.receive socket packet)
-    (String. (.getData packet)
-             0 (.getLength packet))))
+(defn- same-node? [node another-node]
+  (= (gossip/get-id @node)
+     (gossip/get-id @another-node)))
 
-(defn receive [{:keys [socket]}]
-  (recieve-from socket))
+(defn- join [socket node seed-node]
+  (when (not (same-node? node seed-node))
+    (gossip/send-initial socket node (gossip/get-id @seed-node))))
 
-(defn- valid? [msg]
-  true)
+(def ^:private gossip-core-data-marker #"--")
 
-(defn- parse-str [str]
-  (edn/read-string str))
+(defn- inject-queue [queue packet]
+  (let [[type data](string/split (udp/get-data packet) gossip-core-data-marker)
+        work (edn/read-string data)]
+    (when (= type "gossip")
+      (queue/submit queue work))))
 
-(defn- start [port]
-  (let [socket (DatagramSocket. port)]
-    {:socket socket
-     :stop (fn []
-             (.close socket))}))
+(defn- gossip-handler [queue]
+  (fn [socket node packet]
+    (inject-queue queue packet)
+    (gossip/handle-message socket node packet)))
 
-(defrecord Server [port]
+(defn- gossip-receive-loop [socket node queue]
+  (gossip-utils/receive socket (udp/empty-packet packet-size) node (gossip-handler queue)))
+
+(defn- start-node [{:keys [node socket] :as gossip} queue seed-node]
+  (let [future (gossip-receive-loop socket node queue)]
+    (configure-node socket node)
+    (join socket node seed-node)
+    (assoc gossip :future future)))
+
+(defn- stop-node [{:keys [node socket future] :as gossip}]
+  (gossip/unsubscribe socket node)
+  (future-cancel future)
+  (udp/close-udp-server socket))
+
+(defrecord Server [port queue seed-node]
   component/Lifecycle
   (start [server]
     (println "starting p2p server...")
-    (merge server (start port)))
+    (let [gossip (create-gossip-node port)]
+      (assoc server :gossip (start-node gossip queue seed-node))))
   (stop [server]
     (println "stopping p2p server...")
-    (when-let [stop (:stop server)]
-      (stop))
-    (merge server {:socket nil
-                   :stop nil})))
+    (when-let [gossip (:gossip server)]
+      (stop-node gossip))
+    (merge server {:gossip nil})))
 
 (defn new [config]
-  (component/using (map->Server config)
-                   []))
+  (component/using (map->Server (update config
+                                        :seed-node
+                                        (fn [{:keys [ip port]}]
+                                          (create-node ip port))))
+                   [:queue]))
+
+(defn- send [{{:keys [socket node]} :gossip} data]
+  (gossip/gossip socket node (prn-str data)))
 
 (defn get-best-chain [p2p & {:keys [:or default]}]
   ;; TODO ask peers
   default)
 
-(defn send-block [p2p block]
-  (println "publishing new block to peers!!!" block))
-  ;; (send p2p block))
-
-(defn send-transaction [p2p transaction]
-  (println "sending transaction to peers!!!"))
-;; (send p2p transaction))
-
-(defn query-inventory [p2p]
+(defn query-inventory
+  "query-inventory requests blocks and transactions from peers"
+  [p2p]
   {:blocks []
    :transactions []})
+
+(defn send-block [p2p block]
+  (send p2p (queue/->block block)))
+
+(defn send-transaction [p2p transaction]
+  (send p2p (queue/->transaction transaction)))

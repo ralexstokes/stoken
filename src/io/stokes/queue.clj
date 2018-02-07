@@ -9,7 +9,7 @@
 (defn dispatch [msg & rest]
   (tag msg))
 
-(defn- submit [queue work]
+(defn submit [queue work]
   (async/go
     (async/>! queue work)))
 
@@ -19,11 +19,11 @@
    {tag key
     key msg}))
 
-(defn- ->transaction [transaction]
+(defn ->transaction [transaction]
   (with-tag
     :transaction transaction))
 
-(defn- ->block [block]
+(defn ->block [block]
   (with-tag
     :block block))
 
