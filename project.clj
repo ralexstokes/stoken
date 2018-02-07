@@ -1,8 +1,8 @@
 (defproject io.stokes/stoken "0.1.0-SNAPSHOT"
   :description "a simple proof-of-work blockchain"
   :url "github.com/ralexstokes/stoken"
-  :license {:name "TODO: Choose a license"
-            :url "http://choosealicense.com/"}
+  :license {:name "MIT License"
+            :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/core.async "0.3.465"]
                  [crypto-random "1.2.0"]
