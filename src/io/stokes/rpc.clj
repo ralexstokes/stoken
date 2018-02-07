@@ -9,11 +9,20 @@
             [io.stokes.state :as state]
             [io.stokes.queue :as queue]))
 
-(defn- ->transaction [req]
-  (let [{:strs [from to amount fee]} (-> req
-                                         slurp
-                                         json/read-str)]
-    (transaction/from from to amount fee)))
+(defn- massage-input [{:strs [previous-transaction-hash previous-transaction-output-index signature public-key]}]
+  [previous-transaction-hash previous-transaction-output-index signature public-key])
+
+(defn- massage-output [{:strs [value address]}]
+  [value address])
+
+(defn- ->transaction [ledger req]
+  (let [{:strs [inputs outputs]} (-> req
+                                     slurp
+                                     json/read-str)]
+    (transaction/new
+     {:inputs (map #(apply transaction/new-input ledger %)
+                   (map massage-input inputs))
+      :outputs (map #(apply transaction/new-output %) (map massage-output outputs))})))
 
 (defn- make-handler [state queue]
   (compojure/routes
@@ -28,7 +37,7 @@
                     {:body (prn-str transaction-pool)}))
    (compojure/POST "/transaction" {:keys [body]}
                    (->> body
-                        ->transaction
+                        (->transaction (state/->ledger state))
                         (queue/submit-transaction queue))
                    {:status 200})))
 

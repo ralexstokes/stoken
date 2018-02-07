@@ -35,11 +35,22 @@
   (let [inventory (p2p/query-inventory p2p)]
     (queue/submit-inventory queue inventory)))
 
-(defmethod dispatch :mine [_ {:keys [state queue miner]}]
-  (cancel-miner miner)
+(defn- dispatch-mine [{:keys [state queue miner]}]
   (let [chain (state/->best-chain state)
         pool (state/->transactions state)]
     (run-miner queue miner chain pool)))
+
+(defn- dispatch-mine-with-counter [{:keys [state queue miner blocks-to-mine] :as scheduler}]
+  (let [remaining @blocks-to-mine]
+    (when (pos? remaining)
+      (dispatch-mine scheduler)
+      (swap! blocks-to-mine dec))))
+
+(defmethod dispatch :mine [_ {:keys [state queue miner blocks-to-mine] :as scheduler}]
+  (cancel-miner miner)
+  ((if blocks-to-mine
+     dispatch-mine-with-counter
+     dispatch-mine) scheduler))
 
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))
@@ -70,11 +81,10 @@
 (defn- begin-mining [queue]
   (queue/submit-request-to-mine queue))
 
-(defn- start [{:keys [queue node-should-mine?] :as scheduler}]
+(defn- start [{:keys [queue] :as scheduler}]
   (let [workers (start-workers scheduler)]
     (query-peers queue)
-    (when node-should-mine?
-      (begin-mining queue))
+    (begin-mining queue)
     workers))
 
 (defrecord Scheduler [state queue p2p miner]
@@ -88,6 +98,13 @@
     (stop-workers (:workers scheduler))
     (dissoc scheduler :workers)))
 
+(defn- atomize
+  "wrap block counter in an atom so we can mutate it later"
+  [{:keys [blocks-to-mine] :as config}]
+  (if blocks-to-mine
+    (assoc config :blocks-to-mine (atom blocks-to-mine))
+    config))
+
 (defn new [config]
-  (component/using (map->Scheduler config)
+  (component/using (map->Scheduler (atomize config))
                    [:state :queue :p2p :miner]))

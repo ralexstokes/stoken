@@ -1,16 +1,15 @@
 (ns io.stokes.state
   (:require
-   [io.stokes.ledger :as ledger]
    [io.stokes.transaction :as transaction]
    [io.stokes.transaction-pool :as transaction-pool]
    [io.stokes.block :as block]))
 
 (defn new [{:keys [ledger transaction-pool blockchain]}]
-  (atom {:ledger (ledger/from ledger)
+  (atom {:ledger (transaction/ledger ledger)
          :transaction-pool (transaction-pool/new transaction-pool)
          :blockchain (block/chain-from blockchain)}))
 
-(defn- ->ledger [state]
+(defn ->ledger [state]
   (:ledger @state))
 (defn- ->blockchain [state]
   (:blockchain @state))
@@ -41,7 +40,7 @@
 (defn- adjust-ledger [state transactions]
   (update-state state
                 :ledger
-                ledger/apply-transactions transactions))
+                transaction/apply-transactions-to-ledger transactions))
 
 (defn- adjust-transaction-pool [state transactions]
   (update-state state
@@ -61,7 +60,7 @@
 (defn ->balances [state]
   (-> state
       ->ledger
-      ledger/balances))
+      transaction/ledger-balances))
 
 (defn ->best-chain [state]
   (-> state

@@ -44,33 +44,46 @@
 (defn- select-transactions [pool]
   (transaction-pool/take-by-fee pool 20))
 
-(defn- build-coinbase-transaction [address subsidy]
-  (transaction/from nil address subsidy 0))
+(defn- ->coinbase-transaction [address subsidy block-height]
+  (transaction/for-coinbase address subsidy block-height))
 
-(defn- derive-next-block [chain transactions]
-  (block/next-template chain transactions))
+(def ^:private default-number-of-rounds
+  "how many nonces to search for a solution"
+  250)
 
-(def ^:private halving-frequency
+(def ^:private default-halving-frequency
   "how many blocks occur since the last time the block reward halved"
   5000)
 
-(def ^:private base-block-reward
+(def ^:private default-base-block-reward
   "the largest block reward that will ever be claimed"
   128)
 
-(defn- calculate-subsidy [chain]
+(defn- calculate-subsidy [chain halving-frequency base-block-reward]
   (let [height (count chain)
         halvings (quot height halving-frequency)]
     (int (quot base-block-reward
                (Math/pow 2 halvings)))))
 
-(defn mine [{:keys [number-of-rounds coinbase max-threshold max-seed] :or {number-of-rounds 250}} chain transaction-pool]
+(defn- derive-next-block [chain coinbase transaction-pool halving-frequency base-block-reward]
+  (let [transactions (select-transactions transaction-pool)
+        subsidy (calculate-subsidy chain halving-frequency base-block-reward)
+        coinbase-transaction (->coinbase-transaction coinbase subsidy (count chain))]
+    (block/next-template chain (conj transactions
+                                     coinbase-transaction))))
+
+(defn mine [{:keys [number-of-rounds
+                    halving-frequency
+                    base-block-reward
+                    coinbase
+                    max-threshold
+                    max-seed]
+             :or {number-of-rounds default-number-of-rounds
+                  halving-frequency default-halving-frequency
+                  base-block-reward default-base-block-reward}}
+            chain transaction-pool]
   (let [seed (rand-int max-seed)
-        subsidy (calculate-subsidy chain)
-        transactions (select-transactions transaction-pool)
-        coinbase-transaction (build-coinbase-transaction coinbase subsidy)
-        next-block (derive-next-block chain (concat [coinbase-transaction]
-                                                    transactions))]
+        next-block (derive-next-block chain coinbase transaction-pool halving-frequency base-block-reward)]
     (mine-range next-block seed number-of-rounds max-threshold)))
 
 (defn new [config]

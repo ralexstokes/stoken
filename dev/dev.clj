@@ -27,7 +27,6 @@
    [io.stokes.p2p :as p2p]
    [io.stokes.block :as block]
    [io.stokes.transaction :as transaction]
-   [io.stokes.ledger :as ledger]
    [io.stokes.miner :as miner]
    [io.stokes.state :as state]
    [io.stokes.queue :as queue]
@@ -54,8 +53,12 @@
   [str]
   (hex->bignum str))
 
-(defn mine-until-sealed [chain transaction-pool]
-  (let [miner {:coinbase "0xdeadbeefcafe"
+(def some-keys (take 10 (repeatedly key/new)))
+(def coinbase-key (first some-keys))
+(def coinbase (key/->address coinbase-key))
+
+(defn mine-until-sealed [chain transaction-pool coinbase]
+  (let [miner {:coinbase coinbase
                :max-threshold (max-threshold max-threshold-str-easy)
                :max-seed 1000000}]
     (loop [block (miner/mine miner chain transaction-pool)]
@@ -64,48 +67,39 @@
         (recur (miner/mine miner chain transaction-pool))))))
 
 (def genesis-block
-  (mine-until-sealed [] (transaction-pool/new {})))
+  (mine-until-sealed [] (transaction-pool/new {}) coinbase))
 
 (def genesis-string (pr-str (block/readable genesis-block)))
 
-(defn mock-transaction []
-  (transaction/from (rand/hex 8) (rand/hex 8) 50 (-> (rand)
-                                                     (* 100)
-                                                     int)))
 
-(def mock-transactions (take 100 (repeatedly mock-transaction)))
-
-(defn- ledger-state [transactions]
-  (reduce (fn [ledger {:keys [from to]}]
-            (-> ledger
-                (assoc to   10000)
-                (assoc from 10000))) {} transactions))
-
-(def a-key-pair (key/new))
-(def mock-address (key/->address a-key-pair))
-
-(defn- config [transactions mine? easy-mining?]
+(defn- config [transactions blocks-to-mine easy-mining? coinbase seed-node?]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
    :p2p              {:port 8888}
    :scheduler        {:number-of-workers 1
-                      :node-should-mine? mine?}
+                      :blocks-to-mine blocks-to-mine}
    :miner            {:number-of-rounds 1000
-                      :coinbase mock-address
+                      :coinbase coinbase
                       :max-threshold (max-threshold (if easy-mining?
                                                       max-threshold-str-easy
                                                       max-threshold-str-hard))
                       :max-seed 1000000}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
-   :ledger           {:initial-state (ledger-state transactions)}})
+   :ledger           {:initial-state (:transactions genesis-block)}})
 
 ;; convenience flags for development
 (def transactions [])
-(def mine? false)
+(def blocks-to-mine 2)
 (def easy-mining? true)
 
-(def dev-config (config transactions mine? easy-mining?))
+;; some convenience functions for the REPL
+
+(defn chain [system] (state/->best-chain (:state system)))
+(defn ledger [system] (:ledger @(:state system)))
+(defn balances [system] (state/->balances (:state system)))
+
+(def dev-config (config transactions blocks-to-mine easy-mining? coinbase seed-node?))
 
 (defn dev-system
   "Constructs a system map suitable for interactive development."
@@ -113,18 +107,3 @@
   (node/from dev-config))
 
 (set-init (fn [_] (dev-system)))
-
-;; some convenience functions for the REPL
-
-(defn chain [system] (state/->best-chain (:state system)))
-
-(defn read-n-messages [p2p n]
-  (future (loop [count 0]
-            (while (< count n)
-              (println "got a mesg:"
-                       (p2p/receive p2p))))))
-
-;; (defmacro expose-system [system]
-;;   (for [component (keys system)]
-;;     `(def ~(symbol (name component))
-;;        (~component system))))
