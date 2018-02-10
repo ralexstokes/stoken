@@ -43,7 +43,7 @@
 (def ^:private gossip-core-data-marker #"--")
 
 (defn- inject-queue [queue packet]
-  (let [[type data](string/split (udp/get-data packet) gossip-core-data-marker)
+  (let [[type data] (string/split (udp/get-data packet) gossip-core-data-marker)
         work (edn/read-string data)]
     (when (= type "gossip")
       (queue/submit queue work))))
