@@ -93,23 +93,93 @@
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (:transactions genesis-block)}})
 
-;; convenience flags for development
+;; some convenience data for development
+
 (def transactions [])
 (def blocks-to-mine 2)
 (def easy-mining? true)
 (def seed-node? true)
+(def peer-count 2) ;; excludes the seed node
 
-;; some convenience functions for the REPL
+(def seed-node-config (config transactions blocks-to-mine easy-mining? coinbase seed-node?))
 
-(defn chain [system] (state/->best-chain (:state system)))
+(defn seed-node-system
+  "Constructs a system map suitable for interactive development."
+  []
+  (node/from seed-node-config))
+
+(defn peer-node-config [sequence-number]
+  (-> seed-node-config
+      (update-in
+       [:p2p :port]
+       (constantly nil))
+      (update-in
+       [:rpc :port]
+       (fn [port]
+         (+ port sequence-number 1)))))
+
+(defn peer-node-system
+  [n]
+  (node/from (peer-node-config n)))
+
+(defn create-peers
+  "creates a stream of peer nodes"
+  [n]
+  (->> (range)
+       (map peer-node-system)
+       (take n)))
+
+(defn network-of [{:keys [peer-count]}]
+  (let [nodes (concat [(seed-node-system)]
+                      (create-peers peer-count))]
+    {:nodes (atom nodes)}))
+
+(defn ->nodes [system]
+  (-> system
+      :nodes
+      deref))
+
+(defn apply->nodes [system f]
+  (->> system
+       ->nodes
+       (map f)))
+
+(defn node
+  ([system] (node system 0))
+  ([system n] (get (->nodes system) n nil)))
+
+(defn node->p2p-info
+  "returns the local data for p2p nodes"
+  [node]
+  (-> node
+      :p2p
+      :gossip
+      :node
+      deref))
+
+(defn node->chain [node]
+  (-> node
+      :state
+      state/->best-chain))
+
 (defn ledger [system] (:ledger @(:state system)))
 (defn balances [system] (state/->balances (:state system)))
 
-(def dev-config (config transactions blocks-to-mine easy-mining? coinbase seed-node?))
+(defn with-node
+  ([f] (with-node 0 f))
+  ([n f] (-> system
+             (node n)
+             f)))
 
-(defn dev-system
-  "Constructs a system map suitable for interactive development."
-  []
-  (node/from dev-config))
+(defrecord Network [nodes]
+  component/Lifecycle
+  (start [this]
+    (swap! nodes #(mapv component/start %1))
+    this)
+  (stop [this]
+    (swap! nodes #(->> (reverse %1)
+                       (mapv component/stop)))
+    this))
 
-(set-init (fn [_] (dev-system)))
+(set-init (fn [_] (map->Network
+                   (network-of {:peer-count peer-count}))))
