@@ -62,8 +62,9 @@
     (join socket node seed-node)
     (assoc gossip :future future)))
 
-(defn- stop-node [{:keys [node socket future] :as gossip}]
-  (gossip/unsubscribe socket node)
+(defn- stop-node [{:keys [node socket future] :as gossip} seed-node]
+  (when (not (same-node? node seed-node))
+    (gossip/unsubscribe socket node))
   (future-cancel future)
   (udp/close-udp-server socket))
 
@@ -76,7 +77,7 @@
   (stop [server]
     (println "stopping p2p server...")
     (when-let [gossip (:gossip server)]
-      (stop-node gossip))
+      (stop-node gossip (:seed-node server)))
     (merge server {:gossip nil})))
 
 (defn new [config]
