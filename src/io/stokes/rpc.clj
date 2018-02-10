@@ -51,8 +51,9 @@
     (assoc server :shutdown (start port state queue)))
   (stop [server]
     (println "stopping rpc server...")
-    (let [{:keys [shutdown shutdown-timeout-ms]} server]
-      (shutdown :timeout shutdown-timeout-ms))
+    (let [[shutdown shutdown-timeout-ms] ((juxt :shutdown :shutdown-timeout-ms) server)]
+      (when shutdown
+        (shutdown :timeout shutdown-timeout-ms)))
     server))
 
 (defn new [config]
