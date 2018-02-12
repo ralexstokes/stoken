@@ -39,32 +39,30 @@
   (time/in-seconds
    (time/interval b a)))
 
-(defn- average [seq]
-  (let [n (count seq)
-        sum (reduce + seq)]
-    (/ sum n)))
+(defn- average [default coll]
+  (if (seq coll)
+    (let [n (count coll)
+          sum (reduce + coll)]
+      (/ sum n))
+    default))
 
 (defn- calculate-average-blocktime
-  "if there is not enough data in timestamps to generate an average we just return the target blocktime"
   [timestamps]
-  (let [window 4
-        count-pairs (/ (count timestamps) 2)]
-    (if (< count-pairs window)
-      target-blocktime
-      (average (->> timestamps
-                    reverse
-                    (take 4)
-                    (partition 2)
-                    (map timestamps->blocktimes))))))
+  (->> timestamps
+       reverse
+       (take 4)
+       (partition 2)
+       (map timestamps->blocktimes)
+       (average target-blocktime)))
 
 (defn- calculate-difficulty
   "adjust difficulty so that the average time between blocks is N seconds"
   [block timestamps]
   (let [difficulty (difficulty block)
         average-blocktime (calculate-average-blocktime timestamps)
-        next        (cond (> average-blocktime target-blocktime) dec
-                          (< average-blocktime target-blocktime) inc
-                          :else                                  identity) ]
+        next        (if (> average-blocktime target-blocktime)
+                      dec
+                      inc)]
     (next difficulty)))
 
 (defn- header-from [chain transactions]
