@@ -71,8 +71,6 @@
 (def genesis-block
   (mine-until-sealed [] (transaction-pool/new {}) coinbase))
 
-(def genesis-string (pr-str (block/readable genesis-block)))
-
 (def seed-node-ip (.getHostAddress (udp/localhost)))
 (def seed-node-port 40404)
 
@@ -97,7 +95,7 @@
 ;; some convenience data for development
 
 (def transactions [])
-(def blocks-to-mine 2)
+(def blocks-to-mine 1)
 (def easy-mining? true)
 (def seed-node? true)
 (def peer-count 2)
@@ -148,11 +146,6 @@
   (-> system
       :nodes
       deref))
-
-(defn- apply->nodes [system f]
-  (->> system
-       ->nodes
-       (map f)))
 
 (defn- node
   ([system] (node system 0))
@@ -210,14 +203,28 @@
        ->nodes
        (map node->chain)))
 
+(defn- hash-at-block [chain selector]
+  (let [block (selector chain)]
+    (block/hash block)))
+
+(defn- chain->genesis-block-hash [chain]
+  (hash-at-block chain first))
+
+(defn- chain->head-block-hash [chain]
+  (hash-at-block chain last))
+
+(defn- apply-chains [system f]
+  (->> system
+       ->chains
+       (map f)))
+
 (defn- chain-consensus?
   "indicates if every peer in the system has the same view of the chain's head"
   [system]
-  (->> system
-       ->chains
-       (map last)
-       (map block/hash)
-       (apply =)))
+  (apply = (apply-chains system chain->head-block-hash)))
+
+(defn- chains-same-lenth? [system]
+  (apply = (apply-chains system count)))
 
 (defn- healthy-network? [system]
   (let [tests [fully-connected?
@@ -228,27 +235,20 @@
 (defn ledger [system] (:ledger @(:state system)))
 (defn balances [system] (state/->balances (:state system)))
 
-
 ;; launch a network of `peer-count` peers
 
 (set-init (fn [_] (network-of {:peer-count peer-count})))
 
 (comment
-  (apply->nodes system node->p2p-network)
-  (->> system
-       ->nodes
-       (map :p2p))
+  (healthy-network? system)
 
   (describe-network-topology system)
   (fully-connected? system)
 
   (chain-consensus? system)
-  (->> system
-       ->chains
-       (map last)
-       (map block/hash))
+  (apply =
+         (apply-chains system chain->genesis-block-hash))
 
   (stop)
   (reset)
-
   )
