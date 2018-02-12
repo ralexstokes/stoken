@@ -47,6 +47,9 @@
 (def max-threshold-str-hard
   "00000000FFFF0000000000000000000000000000000000000000000000000000")
 
+(def max-threshold-str-medium
+  "000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+
 (def max-threshold-str-easy
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
@@ -55,9 +58,14 @@
   [str]
   (hex->bignum str))
 
-(def some-keys (take 10 (repeatedly key/new)))
+(def some-keys (repeatedly key/new))
 (def coinbase-key (first some-keys))
-(def coinbase (key/->address coinbase-key))
+(defn- coinbase-for [node-number]
+  (-> some-keys
+      (nth node-number)
+      key/->address))
+
+(def coinbase (coinbase-for 0))
 
 (defn mine-until-sealed [chain transaction-pool coinbase]
   (let [miner {:coinbase coinbase
@@ -74,7 +82,7 @@
 (def seed-node-ip (.getHostAddress (udp/localhost)))
 (def seed-node-port 40404)
 
-(defn- config [transactions blocks-to-mine easy-mining? coinbase seed-node?]
+(defn- config [transactions blocks-to-mine max-threshold-str coinbase seed-node?]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
    :p2p              {:port (if seed-node? seed-node-port nil)
@@ -84,9 +92,7 @@
                       :blocks-to-mine blocks-to-mine}
    :miner            {:number-of-rounds 1000
                       :coinbase coinbase
-                      :max-threshold (max-threshold (if easy-mining?
-                                                      max-threshold-str-easy
-                                                      max-threshold-str-hard))
+                      :max-threshold (max-threshold max-threshold-str)
                       :max-seed 1000000}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
@@ -95,14 +101,14 @@
 ;; some convenience data for development
 
 (def transactions [])
-(def blocks-to-mine 1)
-(def easy-mining? true)
+(def blocks-to-mine 20)
+(def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
 (def peer-count 2)
 
 ;; tools to construct a network of many nodes
 
-(def seed-node-config (config transactions blocks-to-mine easy-mining? coinbase seed-node?))
+(def seed-node-config (config transactions blocks-to-mine max-threshold-str (coinbase-for 0) seed-node?))
 
 (defn seed-node-system
   "Constructs a system map suitable for interactive development."
@@ -112,7 +118,8 @@
 (defn peer-node-config [id]
   (-> seed-node-config
       (update-in [:p2p :port] (constantly nil))
-      (update-in [:rpc :port] #(+ % id 1))))
+      (update-in [:miner :coinbase] (constantly (coinbase-for id)))
+      (update-in [:rpc :port] #(+ % id))))
 
 (defn peer-node-system
   [id]
@@ -122,6 +129,7 @@
   "creates a stream of peer nodes"
   [n]
   (->> (range)
+       (drop 1)
        (map peer-node-system)
        (take n)))
 
@@ -139,7 +147,7 @@
 
 (defn- network-of [{:keys [peer-count]}]
   (let [nodes (concat [(seed-node-system)]
-                      (create-peers peer-count))]
+                      (create-peers (dec peer-count)))]
     (Network. (atom nodes))))
 
 (defn- ->nodes [system]
@@ -246,9 +254,41 @@
   (fully-connected? system)
 
   (chain-consensus? system)
+  (chains-same-lenth? system)
+  (apply-chains system count)
   (apply =
          (apply-chains system chain->genesis-block-hash))
+  (apply-chains system chain->genesis-block-hash)
+  (apply-chains system chain->head-block-hash)
+  (apply-chains system #(map block/hash %))
+
+  (defn- diff-chains [chains]
+    (->> chains
+         (apply map vector)
+         ))
+
+  (->> system
+       ->chains
+       (apply map vector)
+       )
 
   (stop)
   (reset)
+
+
+  (def seed-node
+    (->> system
+         ->nodes
+         first))
+
+  seed-node
+  (def seed-p2p
+    (:p2p seed-node))
+  (def seed-chain
+    (-> seed-node
+        :state
+        deref
+        :blockchain))
+
+  seed-chain
   )
