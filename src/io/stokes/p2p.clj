@@ -5,12 +5,14 @@
             [udp-wrapper.core :as udp]
             [io.stokes.queue :as queue]
             [clojure.set :as set]
-            [clojure.pprint :as pp])
+            [clojure.pprint :as pp]
+            [io.stokes.block :as block]
+            [clj-time.coerce :as coerce])
   (:refer-clojure :exclude [send])
   (:import (java.net DatagramSocket)))
 
 (def ^:private ip (.getHostAddress (udp/localhost)))
-(def ^:private packet-size 512)
+(def ^:private packet-size 1024)
 
 (defn- new-peer
   ([{:keys [ip port]}] (new-peer ip port))
@@ -43,8 +45,8 @@
 
 (defn- send-message
   ([{:keys [socket peer-set] :as node} msg]
-   (for [peer @peer-set]
-     (send-message node peer msg)))
+   (run! #(send-message node % msg)
+         @peer-set))
   ([{:keys [socket]} {:keys [ip port]} msg]
    (let [packet (make-packet ip port msg)]
      (udp/send-message socket packet))))
@@ -58,18 +60,17 @@
            {::ip ip
             ::port port})))
 
-(defn- start-recv-loop [socket queue]
+(defn- start-recv-loop [socket handler]
   (let [packet (udp/empty-packet packet-size)]
     (future (while true
-              (let [msg (recv-message socket packet)]
-                (queue/submit queue msg))))))
+              (handler (recv-message socket packet))))))
 
-(defn- start-node [port queue]
+(defn- start-node [port handler]
   (let [peer-set (new-peer-set)
         socket (if port
                  (DatagramSocket. port)
                  (DatagramSocket.))
-        recv-loop (start-recv-loop socket queue)]
+        recv-loop (start-recv-loop socket handler)]
     {:peer-set peer-set
      :socket socket
      :recv-loop recv-loop
@@ -104,10 +105,17 @@
                           (node-id local))]
       (send-message local remote (queue/->peer-set all-peers)))))
 
+(defn- msg-handler [queue]
+  (fn [msg]
+    (queue/submit queue (if (= :block (:tag msg))
+                          (update-in msg [:block :time]
+                                     coerce/from-date)
+                          msg))))
+
 (defrecord Server [port queue seed-node]
   component/Lifecycle
   (start [server]
-    (let [node (start-node port queue)
+    (let [node (start-node port msg-handler)
           seed-node (new-peer seed-node)]
       (announce node seed-node)
       (merge server node)))
@@ -129,8 +137,9 @@
    :transactions []})
 
 (defn send-block [p2p block]
-  (send-message p2p (queue/->block block)))
+  (send-message p2p (-> block
+                        block/readable
+                        queue/->block)))
 
 (defn send-transaction [p2p transaction]
   (send-message p2p (queue/->transaction transaction)))
-
