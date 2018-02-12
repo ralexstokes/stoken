@@ -52,6 +52,11 @@
      dispatch-mine-with-counter
      dispatch-mine) scheduler))
 
+(defmethod dispatch :peers [{peer-set :peers :as request} {:keys [p2p]}]
+  (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
+    (run! (partial p2p/announce p2p)
+          new-peers)))
+
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))
 

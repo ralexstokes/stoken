@@ -18,6 +18,7 @@
    [clojure.string :as string]
    [clojure.test :as test]
    [clojure.edn :as edn]
+   [clojure.set :as set]
    [clojure.tools.namespace.repl :refer [refresh refresh-all clear]]
    [com.stuartsierra.component :as component]
    [com.stuartsierra.component.repl :refer [reset set-init start stop system]]
@@ -73,7 +74,7 @@
 (def genesis-string (pr-str (block/readable genesis-block)))
 
 (def seed-node-ip (.getHostAddress (udp/localhost)))
-(def seed-node-port 57177)
+(def seed-node-port 40404)
 
 (defn- config [transactions blocks-to-mine easy-mining? coinbase seed-node?]
   {:rpc              {:port 3000
@@ -99,7 +100,9 @@
 (def blocks-to-mine 2)
 (def easy-mining? true)
 (def seed-node? true)
-(def peer-count 2) ;; excludes the seed node
+(def peer-count 2)
+
+;; tools to construct a network of many nodes
 
 (def seed-node-config (config transactions blocks-to-mine easy-mining? coinbase seed-node?))
 
@@ -108,19 +111,14 @@
   []
   (node/from seed-node-config))
 
-(defn peer-node-config [sequence-number]
+(defn peer-node-config [id]
   (-> seed-node-config
-      (update-in
-       [:p2p :port]
-       (constantly nil))
-      (update-in
-       [:rpc :port]
-       (fn [port]
-         (+ port sequence-number 1)))))
+      (update-in [:p2p :port] (constantly nil))
+      (update-in [:rpc :port] #(+ % id 1))))
 
 (defn peer-node-system
-  [n]
-  (node/from (peer-node-config n)))
+  [id]
+  (node/from (peer-node-config id)))
 
 (defn create-peers
   "creates a stream of peer nodes"
@@ -129,57 +127,128 @@
        (map peer-node-system)
        (take n)))
 
-(defn network-of [{:keys [peer-count]}]
-  (let [nodes (concat [(seed-node-system)]
-                      (create-peers peer-count))]
-    {:nodes (atom nodes)}))
-
-(defn ->nodes [system]
-  (-> system
-      :nodes
-      deref))
-
-(defn apply->nodes [system f]
-  (->> system
-       ->nodes
-       (map f)))
-
-(defn node
-  ([system] (node system 0))
-  ([system n] (get (->nodes system) n nil)))
-
-(defn node->p2p-info
-  "returns the local data for p2p nodes"
-  [node]
-  (-> node
-      :p2p
-      :gossip
-      :node
-      deref))
-
-(defn node->chain [node]
-  (-> node
-      :state
-      state/->best-chain))
-
-(defn ledger [system] (:ledger @(:state system)))
-(defn balances [system] (state/->balances (:state system)))
-
-(defn with-node
-  ([f] (with-node 0 f))
-  ([n f] (-> system
-             (node n)
-             f)))
-
 (defrecord Network [nodes]
   component/Lifecycle
   (start [this]
-    (swap! nodes #(mapv component/start %1))
+    (swap! nodes
+           (fn [nodes]
+             (mapv #(component/start %) nodes)))
     this)
   (stop [this]
     (swap! nodes #(->> (reverse %1)
                        (mapv component/stop)))
     this))
 
-(set-init (fn [_] (map->Network
-                   (network-of {:peer-count peer-count}))))
+(defn- network-of [{:keys [peer-count]}]
+  (let [nodes (concat [(seed-node-system)]
+                      (create-peers peer-count))]
+    (Network. (atom nodes))))
+
+(defn- ->nodes [system]
+  (-> system
+      :nodes
+      deref))
+
+(defn- apply->nodes [system f]
+  (->> system
+       ->nodes
+       (map f)))
+
+(defn- node
+  ([system] (node system 0))
+  ([system n] (get (->nodes system) n nil)))
+
+(defn- node->p2p-network
+  "returns the local data for p2p nodes"
+  [node]
+  (-> node
+      :p2p
+      (select-keys [:ip :port :peer-set])
+      (update-in [:peer-set] deref)))
+
+(defn- network-connectivity [network]
+  (->> network
+       ->nodes
+       (map node->p2p-network)))
+
+(defn- find-all-peers
+  "gathers all peers across the network into a set"
+  [lists]
+  (reduce (fn [set {:keys [port peer-set]}]
+            (into set peer-set)) #{} lists))
+
+(defn- add-missing-peers
+  "decorates each peer with the other peers it is missing"
+  [peers]
+  (let [all-peers (find-all-peers peers)]
+    (map (fn [peer]
+           (let [known (conj
+                        (:peer-set peer)
+                        (select-keys peer [:ip :port]))
+                 missing (set/difference known all-peers )]
+             (assoc peer :missing missing)))
+         peers)))
+
+(defn- describe-network-topology [system]
+  (let [peers (network-connectivity system)]
+    (add-missing-peers peers )))
+
+(defn- fully-connected?
+  "indicates if every peer in the system knows about every other peer"
+  [system]
+  (->> system
+       describe-network-topology
+       (every? (comp empty? :missing))))
+
+(defn- node->chain [node]
+  (-> node
+      :state
+      state/->best-chain))
+
+(defn- ->chains [system]
+  (->> system
+       ->nodes
+       (map node->chain)))
+
+(defn- chain-consensus?
+  "indicates if every peer in the system has the same view of the chain's head"
+  [system]
+  (->> system
+       ->chains
+       (map last)
+       (map block/hash)
+       (apply =)))
+
+(defn- healthy-network? [system]
+  (let [tests [fully-connected?
+               chain-consensus?]]
+    (every? true?
+            (map #(% system) tests))))
+
+(defn ledger [system] (:ledger @(:state system)))
+(defn balances [system] (state/->balances (:state system)))
+
+
+;; launch a network of `peer-count` peers
+
+(set-init (fn [_] (network-of {:peer-count peer-count})))
+
+(comment
+  (apply->nodes system node->p2p-network)
+  (->> system
+       ->nodes
+       (map :p2p))
+
+  (describe-network-topology system)
+  (fully-connected? system)
+
+  (chain-consensus? system)
+  (->> system
+       ->chains
+       (map last)
+       (map block/hash))
+
+  (stop)
+  (reset)
+
+  )

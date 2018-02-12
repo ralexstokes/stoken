@@ -3,90 +3,120 @@
             [clojure.edn :as edn]
             [clojure.string :as string]
             [udp-wrapper.core :as udp]
-            [gossip.core :as gossip]
-            [gossip.utils :as gossip-utils]
-            [io.stokes.queue :as queue])
+            [io.stokes.queue :as queue]
+            [clojure.set :as set]
+            [clojure.pprint :as pp])
   (:refer-clojure :exclude [send])
-  (:import (java.net InetAddress
-                     InetSocketAddress
-                     DatagramPacket
-                     DatagramSocket
-                     SocketException)))
-
-(defn- create-node [ip port]
-  (ref (gossip/create-node ip port)))
+  (:import (java.net DatagramSocket)))
 
 (def ^:private ip (.getHostAddress (udp/localhost)))
 (def ^:private packet-size 512)
 
-(defn- create-gossip-node
-  "constructs a node for use in the gossip network. allows for specification of a certain port (intended for seed nodes) and otherwise uses an ephemeral port on the local machine"
-  [port]
-  (let [socket (if port
+(defn- new-peer
+  ([{:keys [ip port]}] (new-peer ip port))
+  ([ip port]
+   {:ip ip
+    :port port}))
+
+(defn- make-packet [ip port msg]
+  (udp/packet
+   (udp/get-bytes-utf8 (prn-str msg))
+   (udp/make-address ip)
+   port))
+
+(defn node-id [node]
+  (select-keys node [:ip :port]))
+
+(defn- same-node? [x y]
+  (= (node-id x)
+     (node-id y)))
+
+(defn- new-peer-set [& peers]
+  (atom (into #{} peers)))
+
+(defn- add-peer [set local-node peer]
+  (swap! set
+         (fn [peer-set]
+           (if-not (same-node? local-node peer)
+             (conj peer-set peer)
+             peer-set))))
+
+(defn- send-message
+  ([{:keys [socket peer-set] :as node} msg]
+   (for [peer @peer-set]
+     (send-message node peer msg)))
+  ([{:keys [socket]} {:keys [ip port]} msg]
+   (let [packet (make-packet ip port msg)]
+     (udp/send-message socket packet))))
+
+(defn- recv-message [socket packet]
+  (udp/receive-message socket packet)
+  (let [ip (udp/get-ip packet)
+        port (udp/get-port packet)
+        data (udp/get-data packet)]
+    (merge (edn/read-string data)
+           {::ip ip
+            ::port port})))
+
+(defn- start-recv-loop [socket queue]
+  (let [packet (udp/empty-packet packet-size)]
+    (future (while true
+              (let [msg (recv-message socket packet)]
+                (queue/submit queue msg))))))
+
+(defn- start-node [port queue]
+  (let [peer-set (new-peer-set)
+        socket (if port
                  (DatagramSocket. port)
-                 (DatagramSocket.))]
-    {:node (create-node ip (.getLocalPort socket))
-     :socket socket}))
+                 (DatagramSocket.))
+        recv-loop (start-recv-loop socket queue)]
+    {:peer-set peer-set
+     :socket socket
+     :recv-loop recv-loop
+     :ip (.getHostAddress (udp/localhost))
+     :port (.getLocalPort socket)}))
 
-(defn- configure-node [socket node]
-  (gossip/schedule-heartbeat-send socket node (* 1000 60 5))
-  (gossip/schedule-heartbeat-dec socket node (* 1000 60 5)))
+(defn- stop-node [{:keys [socket recv-loop] :as node}]
+  (when recv-loop
+    (future-cancel recv-loop))
+  (when socket
+    (udp/close-udp-server socket))
+  {:socket nil
+   :recv-loop nil})
 
-(defn- same-node? [node another-node]
-  (= (gossip/get-id @node)
-     (gossip/get-id @another-node)))
+(defn merge-into-peer-set
+  "merges new-peers into the peer-set; returns set of new peers"
+  [{:keys [peer-set] :as node} peers]
+  (let [new-peers (set/difference peers @peer-set)
+        insertion (comp (partial add-peer peer-set (node-id node))
+                        node-id)]
+    (run! insertion new-peers)
+    new-peers))
 
-(defn- join [socket node seed-node]
-  (when (not (same-node? node seed-node))
-    (gossip/send-initial socket node (gossip/get-id @seed-node))))
+(defn- ->peer-set [p2p]
+  (-> p2p
+      :peer-set
+      deref))
 
-(def ^:private gossip-core-data-marker #"--")
-
-(defn- inject-queue [queue packet]
-  (let [[type data] (string/split (udp/get-data packet) gossip-core-data-marker)
-        work (edn/read-string data)]
-    (when (= type "gossip")
-      (queue/submit queue work))))
-
-(defn- gossip-handler [queue]
-  (fn [socket node packet]
-    (inject-queue queue packet)
-    (gossip/handle-message socket node packet)))
-
-(defn- gossip-receive-loop [socket node queue]
-  (gossip-utils/receive socket (udp/empty-packet packet-size) node (gossip-handler queue)))
-
-(defn- start-node [{:keys [node socket] :as gossip} queue seed-node]
-  (let [future (gossip-receive-loop socket node queue)]
-    (configure-node socket node)
-    (join socket node seed-node)
-    (assoc gossip :future future)))
-
-(defn- stop-node [{:keys [node socket future] :as gossip} seed-node]
-  (when (not (same-node? node seed-node))
-    (gossip/unsubscribe socket node))
-  (future-cancel future)
-  (udp/close-udp-server socket))
+(defn announce [local remote]
+  (when-not (same-node? local remote)
+    (let [all-peers (conj (->peer-set local)
+                          (node-id local))]
+      (send-message local remote (queue/->peer-set all-peers)))))
 
 (defrecord Server [port queue seed-node]
   component/Lifecycle
   (start [server]
-    (let [gossip (create-gossip-node port)]
-      (assoc server :gossip (start-node gossip queue seed-node))))
+    (let [node (start-node port queue)
+          seed-node (new-peer seed-node)]
+      (announce node seed-node)
+      (merge server node)))
   (stop [server]
-    (when-let [gossip (:gossip server)]
-      (stop-node gossip (:seed-node server)))
-    (merge server {:gossip nil})))
+    (merge server (stop-node server))))
 
 (defn new [config]
-  (component/using (map->Server (update config
-                                        :seed-node
-                                        (fn [{:keys [ip port]}]
-                                          (create-node ip port))))
+  (component/using (map->Server config)
                    [:queue]))
-
-(defn- send [{{:keys [socket node]} :gossip} data]
-  (gossip/gossip socket node (prn-str data)))
 
 (defn get-best-chain [p2p & {:keys [:or default]}]
   ;; TODO ask peers
@@ -99,7 +129,8 @@
    :transactions []})
 
 (defn send-block [p2p block]
-  (send p2p (queue/->block block)))
+  (send-message p2p (queue/->block block)))
 
 (defn send-transaction [p2p transaction]
-  (send p2p (queue/->transaction transaction)))
+  (send-message p2p (queue/->transaction transaction)))
+

@@ -27,6 +27,10 @@
   (with-tag
     :block block))
 
+(defn ->peer-set [peer-set]
+  (with-tag
+    :peers peer-set))
+
 (defn submit-transaction [queue transaction]
   (submit queue (->transaction transaction)))
 

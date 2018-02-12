@@ -13,7 +13,6 @@
                  [org.clojure/data.json "0.2.6"]
                  [com.github.Sepia-Officinalis/secp256k1 "fd44e1e0d6"]
                  [rm-hull/base58 "0.1.0"]
-                 [gossip "0.1.0"]
                  [udp-wrapper "0.1.1"]
                  [com.stuartsierra/component "0.3.2"]]
   :repositories [["jitpack" "https://jitpack.io"]]
