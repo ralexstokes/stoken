@@ -71,11 +71,9 @@
 (defrecord Server [port queue seed-node]
   component/Lifecycle
   (start [server]
-    (println "starting p2p server...")
     (let [gossip (create-gossip-node port)]
       (assoc server :gossip (start-node gossip queue seed-node))))
   (stop [server]
-    (println "stopping p2p server...")
     (when-let [gossip (:gossip server)]
       (stop-node gossip (:seed-node server)))
     (merge server {:gossip nil})))

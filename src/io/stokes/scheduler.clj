@@ -90,10 +90,8 @@
 (defrecord Scheduler [state queue p2p miner]
   component/Lifecycle
   (start [scheduler]
-    (println "starting scheduler...")
     (assoc scheduler :workers (start scheduler)))
   (stop [scheduler]
-    (println "stopping scheduler...")
     (cancel-miner miner)
     (stop-workers (:workers scheduler))
     (dissoc scheduler :workers)))

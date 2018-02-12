@@ -47,10 +47,8 @@
 (defrecord Server [port shutdown shutdown-timeout-ms state queue]
   component/Lifecycle
   (start [server]
-    (println "starting rpc server...")
     (assoc server :shutdown (start port state queue)))
   (stop [server]
-    (println "stopping rpc server...")
     (let [[shutdown shutdown-timeout-ms] ((juxt :shutdown :shutdown-timeout-ms) server)]
       (when shutdown
         (shutdown :timeout shutdown-timeout-ms)))
