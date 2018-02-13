@@ -175,8 +175,8 @@
 (defn- find-all-peers
   "gathers all peers across the network into a set"
   [lists]
-  (reduce (fn [set {:keys [port peer-set]}]
-            (into set peer-set)) #{} lists))
+  (reduce (fn [set {:keys [ip port]}]
+            (conj set {:ip ip :port port})) #{} lists))
 
 (defn- add-missing-peers
   "decorates each peer with the other peers it is missing"
@@ -186,7 +186,7 @@
            (let [known (conj
                         (:peer-set peer)
                         (select-keys peer [:ip :port]))
-                 missing (set/difference known all-peers )]
+                 missing (set/difference all-peers known)]
              (assoc peer :missing missing)))
          peers)))
 
