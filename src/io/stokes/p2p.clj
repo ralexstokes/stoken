@@ -115,7 +115,7 @@
 (defrecord Server [port queue seed-node]
   component/Lifecycle
   (start [server]
-    (let [node (start-node port msg-handler)
+    (let [node (start-node port (msg-handler queue))
           seed-node (new-peer seed-node)]
       (announce node seed-node)
       (merge server node)))
