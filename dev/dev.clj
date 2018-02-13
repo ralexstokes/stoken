@@ -192,7 +192,7 @@
 
 (defn- describe-network-topology [system]
   (let [peers (network-connectivity system)]
-    (add-missing-peers peers )))
+    (add-missing-peers peers)))
 
 (defn- fully-connected?
   "indicates if every peer in the system knows about every other peer"
