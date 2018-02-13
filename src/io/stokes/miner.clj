@@ -37,7 +37,7 @@
     (when (pos? count)
       (let [block (prepare-block block nonce)]
         (if (sealed? block max-threshold)
-          block
+          (assoc block :hash (block/hash block))
           (recur (dec count)
                  (inc nonce)))))))
 

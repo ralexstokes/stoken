@@ -15,9 +15,10 @@
   (select-keys block block-header-keys))
 
 (defn hash [block]
-  (-> block
-      header
-      hash/of))
+  (get block :hash
+       (some-> block
+               header
+               hash/of)))
 
 (defn difficulty [block]
   (get block :difficulty 0))
