@@ -101,10 +101,10 @@
 ;; some convenience data for development
 
 (def transactions [])
-(def blocks-to-mine 2)
+(def blocks-to-mine 10)
 (def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
-(def peer-count 2)
+(def peer-count 8)
 
 ;; tools to construct a network of many nodes
 
@@ -297,15 +297,16 @@
   (describe-network-topology system)
   (fully-connected? system)
 
-  (chain-consensus? system)
+  (:hash genesis-block)
+  (chain-consensus? system (:hash genesis-block))
   (genesis-consensus? system (:hash genesis-block))
   (chains-same-lenth? system)
   (apply-chains count system)
   (chain-walks-consistent? system)
 
-  (apply-chains system chain->genesis-block-hash)
-  (apply-chains system chain->head-block-hash)
-  (apply-chains system #(map block/hash %))
+  (apply-chains chain->genesis-block-hash system)
+  (apply-chains chain->head-block-hash system)
+  (apply-chains #(map :hash %) system)
 
   (defn- diff-chains [chains]
     (->> chains
@@ -313,7 +314,12 @@
          ))
 
   (->> system
-       ->chains
+       ->chain
+       (apply map vector)
+       )
+
+  (->> system
+       ->block-tree
        (apply map vector)
        )
 
