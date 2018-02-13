@@ -11,7 +11,7 @@
 
 (defn ->ledger [state]
   (:ledger @state))
-(defn- ->blockchain [state]
+(defn ->blockchain [state]
   (:blockchain @state))
 (defn- ->transaction-pool [state]
   (:transaction-pool @state))

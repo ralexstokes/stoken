@@ -101,7 +101,7 @@
 ;; some convenience data for development
 
 (def transactions [])
-(def blocks-to-mine 20)
+(def blocks-to-mine 2)
 (def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
 (def peer-count 2)
@@ -204,12 +204,22 @@
 (defn- node->chain [node]
   (-> node
       :state
+      state/->blockchain))
+
+(defn- node->best-chain [node]
+  (-> node
+      :state
       state/->best-chain))
 
-(defn- ->chains [system]
+(defn- ->block-tree [system]
   (->> system
        ->nodes
        (map node->chain)))
+
+(defn- ->chain [system]
+  (->> system
+       ->nodes
+       (map node->best-chain)))
 
 (defn- hash-at-block [chain selector]
   (let [block (selector chain)]
@@ -221,18 +231,52 @@
 (defn- chain->head-block-hash [chain]
   (hash-at-block chain last))
 
-(defn- apply-chains [system f]
+(defn- apply-chains [f system]
   (->> system
-       ->chains
+       ->chain
        (map f)))
+
+(defn- genesis-consensus? [system genesis-block-hash]
+  (->> system
+       (apply-chains chain->genesis-block-hash)
+       (every? #(= % genesis-block-hash))))
 
 (defn- chain-consensus?
   "indicates if every peer in the system has the same view of the chain's head"
-  [system]
-  (apply = (apply-chains system chain->head-block-hash)))
+  [system genesis-block-hash]
+  (and
+   (genesis-consensus? system genesis-block-hash)
+   (apply = (apply-chains chain->head-block-hash system))))
 
 (defn- chains-same-lenth? [system]
-  (apply = (apply-chains system count)))
+  (apply = (apply-chains count system)))
+
+(defn- all-blocks [system]
+  (->> system
+       ->chain
+       (reduce into #{})))
+
+(defn- inspect-chains [system ks]
+  (let [chains (->chain system)
+        from-chain (fn [ks]
+                     (fn [chain]
+                       (map #(select-keys % ks) chain)))]
+    (->> chains
+         (map (from-chain ks)))))
+
+(defn- valid-chain-walk? [last-block block]
+  (if (= (:hash last-block)
+         (:previous-hash block))
+    block
+    nil))
+
+(defn- chain-walks-consistent? [system]
+  (let [hash-links (inspect-chains system [:previous-hash :hash])]
+    (->> hash-links
+         (map #(partition-all 2 %))
+         (map #(reduce valid-chain-walk? %))
+         (map (comp not nil?))
+         (every? true?))))
 
 (defn- healthy-network? [system]
   (let [tests [fully-connected?
