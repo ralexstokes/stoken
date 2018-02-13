@@ -10,13 +10,18 @@
   (when-let [cancel @channel]
     (async/close! cancel)))
 
-(defn- run-miner [queue {:keys [channel] :as miner} chain transaction-pool]
-  (let [cancel (async/chan)]
+(defn- publish-block [block queue p2p]
+  (queue/submit-block queue block)
+  (p2p/send-block p2p block))
+
+(defn- run-miner [{:keys [queue miner p2p] :as scheduler} chain transaction-pool]
+  (let [channel (:channel miner)
+        cancel (async/chan)]
     (async/go-loop []
       (let [[_ channel] (async/alts! [cancel] :default :continue)]
         (when-not (= channel cancel)
           (if-let [block (miner/mine miner chain transaction-pool)]
-            (queue/submit-block queue block)
+            (publish-block block queue p2p)
             (recur)))))
     (reset! channel cancel)))
 
@@ -24,7 +29,6 @@
 
 (defmethod dispatch :block [{:keys [block]} {:keys [state p2p queue] :as scheduler}]
   (state/add-block state block)
-  (p2p/send-block p2p block)
   (queue/submit-request-to-mine queue))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
@@ -35,10 +39,10 @@
   (let [inventory (p2p/query-inventory p2p)]
     (queue/submit-inventory queue inventory)))
 
-(defn- dispatch-mine [{:keys [state queue miner]}]
+(defn- dispatch-mine [{:keys [state] :as scheduler}]
   (let [chain (state/->best-chain state)
         pool (state/->transactions state)]
-    (run-miner queue miner chain pool)))
+    (run-miner scheduler chain pool)))
 
 (defn- dispatch-mine-with-counter [{:keys [state queue miner blocks-to-mine] :as scheduler}]
   (let [remaining @blocks-to-mine]
