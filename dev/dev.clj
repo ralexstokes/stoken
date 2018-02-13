@@ -278,9 +278,9 @@
          (map (comp not nil?))
          (every? true?))))
 
-(defn- healthy-network? [system]
+(defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
-               chain-consensus?]]
+               #(chain-consensus? % (:hash genesis-block))]]
     (every? true?
             (map #(% system) tests))))
 
@@ -292,16 +292,17 @@
 (set-init (fn [_] (network-of {:peer-count peer-count})))
 
 (comment
-  (healthy-network? system)
+  (healthy-network? system genesis-block)
 
   (describe-network-topology system)
   (fully-connected? system)
 
   (chain-consensus? system)
+  (genesis-consensus? system (:hash genesis-block))
   (chains-same-lenth? system)
-  (apply-chains system count)
-  (apply =
-         (apply-chains system chain->genesis-block-hash))
+  (apply-chains count system)
+  (chain-walks-consistent? system)
+
   (apply-chains system chain->genesis-block-hash)
   (apply-chains system chain->head-block-hash)
   (apply-chains system #(map block/hash %))
