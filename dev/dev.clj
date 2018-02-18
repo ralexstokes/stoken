@@ -41,8 +41,10 @@
 ;; Do not try to load source code from 'resources' directory
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src" "test")
 
-(defn- hex->bignum [str]
-  (BigInteger. str 16))
+;; some convenience data for development
+
+(def seed-node-ip (.getHostAddress (udp/localhost)))
+(def seed-node-port 40404)
 
 (def max-threshold-str-hard
   "00000000FFFF0000000000000000000000000000000000000000000000000000")
@@ -52,6 +54,17 @@
 
 (def max-threshold-str-easy
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+
+(def transactions [])
+(def blocks-to-mine 0)
+(def max-threshold-str max-threshold-str-easy)
+(def seed-node? true)
+(def peer-count 2)
+
+;; mine the genesis block
+
+(defn- hex->bignum [str]
+  (BigInteger. str 16))
 
 (defn- max-threshold
   "maximum threshold used in Bitcoin; https://en.bitcoin.it/wiki/Target"
@@ -79,8 +92,7 @@
 (def genesis-block
   (mine-until-sealed [] (transaction-pool/new {}) coinbase))
 
-(def seed-node-ip (.getHostAddress (udp/localhost)))
-(def seed-node-port 40404)
+;; tools to construct a network of many nodes
 
 (defn- config [transactions blocks-to-mine max-threshold-str coinbase seed-node?]
   {:rpc              {:port 3000
@@ -97,16 +109,6 @@
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (:transactions genesis-block)}})
-
-;; some convenience data for development
-
-(def transactions [])
-(def blocks-to-mine 10)
-(def max-threshold-str max-threshold-str-medium)
-(def seed-node? true)
-(def peer-count 8)
-
-;; tools to construct a network of many nodes
 
 (def seed-node-config (config transactions blocks-to-mine max-threshold-str (coinbase-for 0) seed-node?))
 
