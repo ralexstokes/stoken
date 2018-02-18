@@ -166,7 +166,7 @@
   [node]
   (-> node
       :p2p
-      (select-keys [:ip :port :peer-set])
+      (select-keys [:io.stokes.p2p/ip :io.stokes.p2p/port :peer-set])
       (update-in [:peer-set] deref)))
 
 (defn- network-connectivity [network]
@@ -177,8 +177,8 @@
 (defn- find-all-peers
   "gathers all peers across the network into a set"
   [lists]
-  (reduce (fn [set {:keys [ip port]}]
-            (conj set {:ip ip :port port})) #{} lists))
+  (reduce (fn [set {:keys [:io.stokes.p2p/ip :io.stokes.p2p/port]}]
+            (conj set (p2p/new-peer ip port))) #{} lists))
 
 (defn- add-missing-peers
   "decorates each peer with the other peers it is missing"
@@ -187,7 +187,7 @@
     (map (fn [peer]
            (let [known (conj
                         (:peer-set peer)
-                        (select-keys peer [:ip :port]))
+                        (p2p/node-id peer))
                  missing (set/difference all-peers known)]
              (assoc peer :missing missing)))
          peers)))

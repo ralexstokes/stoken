@@ -14,11 +14,11 @@
 (def ^:private ip (.getHostAddress (udp/localhost)))
 (def ^:private packet-size 1024)
 
-(defn- new-peer
+(defn new-peer
   ([{:keys [ip port]}] (new-peer ip port))
   ([ip port]
-   {:ip ip
-    :port port}))
+   {::ip ip
+    ::port port}))
 
 (defn- make-packet [ip port msg]
   (udp/packet
@@ -27,7 +27,7 @@
    port))
 
 (defn node-id [node]
-  (select-keys node [:ip :port]))
+  (select-keys node [::ip ::port]))
 
 (defn- same-node? [x y]
   (= (node-id x)
@@ -47,7 +47,7 @@
   ([{:keys [socket peer-set] :as node} msg]
    (run! #(send-message node % msg)
          @peer-set))
-  ([{:keys [socket]} {:keys [ip port]} msg]
+  ([{:keys [socket]} {:keys [::ip ::port]} msg]
    (let [packet (make-packet ip port msg)]
      (udp/send-message socket packet))))
 
@@ -74,8 +74,8 @@
     {:peer-set peer-set
      :socket socket
      :recv-loop recv-loop
-     :ip (.getHostAddress (udp/localhost))
-     :port (.getLocalPort socket)}))
+     ::ip (.getHostAddress (udp/localhost))
+     ::port (.getLocalPort socket)}))
 
 (defn- stop-node [{:keys [socket recv-loop] :as node}]
   (when recv-loop
