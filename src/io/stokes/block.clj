@@ -118,8 +118,29 @@
         children (node->children node)]
     (apply + (difficulty block) (map total-difficulty children))))
 
+(defn- node->timestamp [node]
+  (let [block (node->block node)]
+    (coerce/to-long (:time block))))
+
+(defn- select-earliest-node [nodes]
+  (apply min-key node->timestamp nodes))
+
+(defn- tabulate-work [node]
+  {:node node
+   :work (total-difficulty node)})
+
+(defn- select-nodes-with-most-work [nodes]
+  (let [nodes-with-work (map tabulate-work nodes)
+        max-work (apply max (map :work nodes-with-work))]
+    (reduce (fn [coll {:keys [node work]}]
+              (if (= work max-work)
+                (conj coll node)
+                coll)) [] nodes-with-work)))
+
 (defn- fork-choice-rule [nodes]
-  (apply max-key total-difficulty nodes))
+  (-> nodes
+      select-nodes-with-most-work ;; chains with most work
+      select-earliest-node))      ;; use timestamp as tiebreaker
 
 (defn- collect-best-chain [chain node]
   (let [block (node->block node)
@@ -136,3 +157,19 @@
 
 (defn chain-from [{genesis-block :initial-state}]
   (node-of genesis-block))
+
+(defn tree->blocks
+  "collects every block in the tree into a seq of blocks"
+  [blockchain]
+  (->> (tree-seq :children :children blockchain)
+       (map :block)))
+
+(comment
+  (let [genesis {:hash 0}
+        blocks (map (fn [id] {:hash id
+                              :previous-hash (dec id)}) (range 1 3))
+        chain (chain-from {:initial-state genesis})
+        tree (reduce add-to-chain chain blocks)
+        seq (tree-seq :children :children tree)]
+    (tree->blocks tree))
+  )
