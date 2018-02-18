@@ -56,10 +56,10 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def blocks-to-mine 0)
+(def blocks-to-mine 50)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 2)
+(def peer-count 3)
 
 ;; mine the genesis block
 
@@ -243,21 +243,6 @@
        (apply-chains chain->genesis-block-hash)
        (every? #(= % genesis-block-hash))))
 
-(defn- chain-consensus?
-  "indicates if every peer in the system has the same view of the chain's head"
-  [system genesis-block-hash]
-  (and
-   (genesis-consensus? system genesis-block-hash)
-   (apply = (apply-chains chain->head-block-hash system))))
-
-(defn- chains-same-lenth? [system]
-  (apply = (apply-chains count system)))
-
-(defn- all-blocks [system]
-  (->> system
-       ->chain
-       (reduce into #{})))
-
 (defn- inspect-chains [system ks]
   (let [chains (->chain system)
         from-chain (fn [ks]
@@ -280,6 +265,28 @@
          (map (comp not nil?))
          (every? true?))))
 
+(defn- chain-consensus?
+  "indicates if every peer in the system has the same view of the chain's head"
+  [system genesis-block-hash]
+  (and
+   (genesis-consensus? system genesis-block-hash)
+   (chain-walks-consistent? system)
+   (apply = (apply-chains chain->head-block-hash system))))
+
+(defn- chains-same-lenth? [system]
+  (apply = (apply-chains count system)))
+
+(defn- all-blocks [system]
+  (->> system
+       ->block-tree
+       (mapcat block/tree->blocks)
+       distinct))
+
+(defn- compare-chains-by-hash [system]
+  (->> (apply-chains #(map :hash %) system)
+       (apply map vector)
+       (drop-while #(apply = %))))
+
 (defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
                #(chain-consensus? % (:hash genesis-block))]]
@@ -296,38 +303,32 @@
 (comment
   (healthy-network? system genesis-block)
 
-  (describe-network-topology system)
   (fully-connected? system)
-
-  (:hash genesis-block)
   (chain-consensus? system (:hash genesis-block))
+
+  ;; p2p
+  (describe-network-topology system)
+
+  ;; blockchain
+  (:hash genesis-block)
   (genesis-consensus? system (:hash genesis-block))
-  (chains-same-lenth? system)
   (apply-chains count system)
+  (chains-same-lenth? system)
+  (apply-chains #(map :difficulty %) system)
+
   (chain-walks-consistent? system)
+  (compare-chains-by-hash system)
 
   (apply-chains chain->genesis-block-hash system)
   (apply-chains chain->head-block-hash system)
   (apply-chains #(map :hash %) system)
-
-  (defn- diff-chains [chains]
-    (->> chains
-         (apply map vector)
-         ))
+  (apply-chains #(map :difficulty %) system)
 
   (->> system
-       ->chain
-       (apply map vector)
-       )
-
-  (->> system
-       ->block-tree
-       (apply map vector)
-       )
-
-  (stop)
-  (reset)
-
+       ->nodes
+       (map :scheduler)
+       (map :blocks-to-mine)
+       (map deref))
 
   (def seed-node
     (->> system
@@ -337,6 +338,7 @@
   seed-node
   (def seed-p2p
     (:p2p seed-node))
+
   (def seed-chain
     (-> seed-node
         :state
@@ -344,4 +346,7 @@
         :blockchain))
 
   seed-chain
+
+  (stop)
+  (reset)
   )
