@@ -35,23 +35,15 @@
   (state/add-transaction state transaction)
   (p2p/send-transaction p2p transaction))
 
-
-(defn- dispatch-mine [{:keys [state] :as scheduler}]
+(defmethod dispatch :mine [{{:keys [force?]} :mine} {:keys [state queue miner total-blocks] :as scheduler}]
+  (cancel-miner miner)
   (let [chain (state/->best-chain state)
         pool (state/->transactions state)]
-    (run-miner scheduler chain pool)))
-
-(defn- dispatch-mine-with-counter [{:keys [state queue miner blocks-to-mine] :as scheduler}]
-  (let [remaining @blocks-to-mine]
-    (when (pos? remaining)
-      (dispatch-mine scheduler)
-      (swap! blocks-to-mine dec))))
-
-(defmethod dispatch :mine [_ {:keys [state queue miner blocks-to-mine] :as scheduler}]
-  (cancel-miner miner)
-  ((if blocks-to-mine
-     dispatch-mine-with-counter
-     dispatch-mine) scheduler))
+    (if total-blocks
+      (when (or force?
+                (pos? (- total-blocks (count chain))))
+        (run-miner scheduler chain pool))
+      (run-miner scheduler chain pool))))
 
 (defmethod dispatch :peers [{peer-set :peers} {:keys [p2p]}]
   (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
@@ -109,13 +101,6 @@
     (stop-workers (:workers scheduler))
     (dissoc scheduler :workers)))
 
-(defn- atomize
-  "wrap block counter in an atom so we can mutate it later"
-  [{:keys [blocks-to-mine] :as config}]
-  (if blocks-to-mine
-    (assoc config :blocks-to-mine (atom blocks-to-mine))
-    config))
-
 (defn new [config]
-  (component/using (map->Scheduler (atomize config))
+  (component/using (map->Scheduler config)
                    [:state :queue :p2p :miner]))

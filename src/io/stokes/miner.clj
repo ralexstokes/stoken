@@ -72,25 +72,19 @@
     (block/next-template chain (conj transactions
                                      coinbase-transaction))))
 
-(defn run-miner [{:keys [number-of-rounds
-                         halving-frequency
-                         base-block-reward
-                         coinbase
-                         max-threshold
-                         max-seed]
-                  :or {number-of-rounds default-number-of-rounds
-                       halving-frequency default-halving-frequency
-                       base-block-reward default-base-block-reward}}
-                 chain transaction-pool]
+(defn mine [{:keys [number-of-rounds
+                    halving-frequency
+                    base-block-reward
+                    coinbase
+                    max-threshold
+                    max-seed]
+             :or {number-of-rounds default-number-of-rounds
+                  halving-frequency default-halving-frequency
+                  base-block-reward default-base-block-reward}}
+            chain transaction-pool]
   (let [seed (rand-int max-seed)
         next-block (derive-next-block chain coinbase transaction-pool halving-frequency base-block-reward)]
     (mine-range next-block seed number-of-rounds max-threshold)))
-
-(defn mine [{:keys [total-blocks] :as config} chain transaction-pool]
-  (if total-blocks
-    (when (pos? (- total-blocks (count chain)))
-      (run-miner config chain transaction-pool))
-    (run-miner config chain transaction-pool)))
 
 (defn new [config]
   (merge config {:channel (atom nil)}))

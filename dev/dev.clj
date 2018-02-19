@@ -56,10 +56,10 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 0)
+(def total-blocks 20)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 2)
+(def peer-count 3)
 (def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
 
 ;; mine the genesis block
@@ -101,10 +101,10 @@
    :p2p              {:port (if seed-node? seed-node-port nil)
                       :seed-node {:ip seed-node-ip
                                   :port seed-node-port}}
-   :scheduler        {:number-of-workers 1}
+   :scheduler        {:number-of-workers 1
+                      :total-blocks total-blocks}
    :miner            {:number-of-rounds 1000
                       :coinbase coinbase
-                      :total-blocks total-blocks
                       :max-threshold (max-threshold max-threshold-str)
                       :max-seed max-seed-for-mining}
    :blockchain       {:initial-state genesis-block}
