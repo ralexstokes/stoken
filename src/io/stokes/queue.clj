@@ -37,14 +37,12 @@
 (defn submit-block [queue block]
   (submit queue (->block block)))
 
-(defn submit-inventory [queue {:keys [blocks transactions]}]
-  (for [block blocks]
-    (submit-block queue block))
-  (for [transaction transactions]
-    (submit-transaction queue transaction)))
-
-(defn submit-request-for-inventory [queue]
-  (submit queue (with-tag :inventory)))
-
 (defn submit-request-to-mine [queue]
   (submit queue (with-tag :mine)))
+
+(defn inventory-request []
+  (with-tag :inventory-request))
+
+(defn ->inventory [inventory]
+  (with-tag :inventory
+    inventory))

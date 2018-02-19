@@ -35,9 +35,6 @@
   (state/add-transaction state transaction)
   (p2p/send-transaction p2p transaction))
 
-(defmethod dispatch :inventory [_ {:keys [queue p2p]}]
-  (let [inventory (p2p/query-inventory p2p)]
-    (queue/submit-inventory queue inventory)))
 
 (defn- dispatch-mine [{:keys [state] :as scheduler}]
   (let [chain (state/->best-chain state)
@@ -60,6 +57,14 @@
   (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
     (run! (partial p2p/announce p2p)
           new-peers)))
+
+(defmethod dispatch :inventory-request [request {:keys [p2p state]}]
+  (let [inventory (state/->inventory state)]
+    (p2p/send-inventory p2p request inventory)))
+
+(defmethod dispatch :inventory [{{:keys [transactions blocks]} :inventory} {:keys [queue]}]
+  (run! (partial queue/submit-transaction queue) transactions)
+  (run! (partial queue/submit-block queue) blocks))
 
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))
@@ -84,15 +89,15 @@
   (doall
    (map stop-worker workers)))
 
-(defn- query-peers [queue]
-  (queue/submit-request-for-inventory queue))
+(defn- query-peers [p2p]
+  (p2p/request-inventory p2p))
 
 (defn- begin-mining [queue]
   (queue/submit-request-to-mine queue))
 
-(defn- start [{:keys [queue] :as scheduler}]
+(defn- start [{:keys [queue p2p] :as scheduler}]
   (let [workers (start-workers scheduler)]
-    (query-peers queue)
+    (query-peers p2p)
     (begin-mining queue)
     workers))
 

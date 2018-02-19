@@ -126,16 +126,6 @@
   (component/using (map->Server config)
                    [:queue]))
 
-(defn get-best-chain [p2p & {:keys [:or default]}]
-  ;; TODO ask peers
-  default)
-
-(defn query-inventory
-  "query-inventory requests blocks and transactions from peers"
-  [p2p]
-  {:blocks []
-   :transactions []})
-
 (defn send-block [p2p block]
   (send-message p2p (-> block
                         block/readable
@@ -143,3 +133,16 @@
 
 (defn send-transaction [p2p transaction]
   (send-message p2p (queue/->transaction transaction)))
+
+(defn- select-random-peer [peer-set]
+  (when-not (empty? peer-set)
+    (->> peer-set
+         (into [])
+         (rand-nth))))
+
+(defn request-inventory [p2p]
+  (when-let [random-peer (select-random-peer (->peer-set p2p))]
+    (send-message p2p random-peer (queue/inventory-request))))
+
+(defn send-inventory [p2p peer inventory]
+  (send-message p2p peer (queue/->inventory inventory)))

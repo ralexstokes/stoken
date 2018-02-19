@@ -70,3 +70,9 @@
 (defn ->transactions [state]
   (-> state
       ->transaction-pool))
+
+(defn ->inventory [state]
+  (let [pool (->transactions state)
+        blocks (->best-chain state)]
+    {:transactions pool
+     :blocks blocks}))
