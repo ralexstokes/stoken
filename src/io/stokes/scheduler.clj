@@ -27,7 +27,7 @@
 
 (defmulti dispatch queue/dispatch)
 
-(defmethod dispatch :block [{:keys [block]} {:keys [state p2p queue] :as scheduler}]
+(defmethod dispatch :block [{:keys [block]} {:keys [state queue] :as scheduler}]
   (state/add-block state block)
   (queue/submit-request-to-mine queue))
 
@@ -53,10 +53,9 @@
      dispatch-mine-with-counter
      dispatch-mine) scheduler))
 
-(defmethod dispatch :peers [{peer-set :peers :as request} {:keys [p2p]}]
+(defmethod dispatch :peers [{peer-set :peers} {:keys [p2p]}]
   (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
-    (run! (partial p2p/announce p2p)
-          new-peers)))
+    (run! (partial p2p/announce p2p) new-peers)))
 
 (defmethod dispatch :inventory-request [request {:keys [p2p state]}]
   (let [inventory (state/->inventory state)]
