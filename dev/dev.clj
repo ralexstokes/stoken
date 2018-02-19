@@ -314,10 +314,10 @@
   (apply-chains #(map :difficulty %) system)
 
   (chain-walks-consistent? system)
+  (compare-chains-by-hash system)
 
   (apply-chains chain->genesis-block-hash system)
   (apply-chains chain->head-block-hash system)
-
 
   (->> system
        ->nodes
@@ -341,7 +341,6 @@
         :blockchain))
 
   seed-chain
-
 
   (healthy-network? system genesis-block)
 

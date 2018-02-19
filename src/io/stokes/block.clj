@@ -141,19 +141,12 @@
 (defn- select-earliest-nodes [nodes]
   (min-keys node->timestamp nodes))
 
-(defn- node->hash-code [node]
-  (let [block (node->block node)]
-    (clojure.core/hash block)))
-(defn- select-by-hash-code [nodes]
-  (min-keys node->hash-code nodes))
-
 (defn- fork-choice-rule
-  "We use a fork choice rule resembling Bitcoin Core. First find the nodes with the most work, breaking ties by timestamp and for blocks mined locally use the JVM hash code"
+  "We use a fork choice rule resembling Bitcoin Core. First find the nodes with the most work, breaking ties by timestamp"
   [nodes]
   (-> nodes
       select-nodes-with-most-work
       select-earliest-nodes
-      select-by-hash-code
       first))
 
 (defn- collect-best-chain [chain node]
