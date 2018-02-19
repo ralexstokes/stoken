@@ -56,10 +56,11 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def blocks-to-mine 50)
+(def total-blocks 0)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 3)
+(def peer-count 2)
+(def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
 
 ;; mine the genesis block
 
@@ -94,23 +95,23 @@
 
 ;; tools to construct a network of many nodes
 
-(defn- config [transactions blocks-to-mine max-threshold-str coinbase seed-node?]
+(defn- config [transactions total-blocks max-threshold-str coinbase seed-node? max-seed-for-mining]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
    :p2p              {:port (if seed-node? seed-node-port nil)
                       :seed-node {:ip seed-node-ip
                                   :port seed-node-port}}
-   :scheduler        {:number-of-workers 1
-                      :blocks-to-mine blocks-to-mine}
+   :scheduler        {:number-of-workers 1}
    :miner            {:number-of-rounds 1000
                       :coinbase coinbase
+                      :total-blocks total-blocks
                       :max-threshold (max-threshold max-threshold-str)
-                      :max-seed 1000000}
+                      :max-seed max-seed-for-mining}
    :blockchain       {:initial-state genesis-block}
    :transaction-pool {:initial-state transactions}
    :ledger           {:initial-state (:transactions genesis-block)}})
 
-(def seed-node-config (config transactions blocks-to-mine max-threshold-str (coinbase-for 0) seed-node?))
+(def seed-node-config (config transactions total-blocks max-threshold-str (coinbase-for 0) seed-node? max-seed-for-mining))
 
 (defn seed-node-system
   "Constructs a system map suitable for interactive development."
@@ -301,11 +302,6 @@
 (set-init (fn [_] (network-of {:peer-count peer-count})))
 
 (comment
-  (healthy-network? system genesis-block)
-
-  (fully-connected? system)
-  (chain-consensus? system (:hash genesis-block))
-
   ;; p2p
   (describe-network-topology system)
 
@@ -314,15 +310,14 @@
   (genesis-consensus? system (:hash genesis-block))
   (apply-chains count system)
   (chains-same-lenth? system)
+  (apply-chains #(map :hash %) system)
   (apply-chains #(map :difficulty %) system)
 
   (chain-walks-consistent? system)
-  (compare-chains-by-hash system)
 
   (apply-chains chain->genesis-block-hash system)
   (apply-chains chain->head-block-hash system)
-  (apply-chains #(map :hash %) system)
-  (apply-chains #(map :difficulty %) system)
+
 
   (->> system
        ->nodes
@@ -346,6 +341,12 @@
         :blockchain))
 
   seed-chain
+
+
+  (healthy-network? system genesis-block)
+
+  (fully-connected? system)
+  (chain-consensus? system (:hash genesis-block))
 
   (stop)
   (reset)
