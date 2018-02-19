@@ -118,28 +118,43 @@
         children (node->children node)]
     (apply + (difficulty block) (map total-difficulty children))))
 
+(defn- select-many-by-key [weight f xs]
+  (let [decorated (map (fn [x] [x (f x)]) xs)
+        max-key (apply weight (map second decorated))]
+    (->> decorated
+         (filter #(= max-key (second %)))
+         (map first))))
+
+(defn- max-keys [f xs]
+  (select-many-by-key max f xs))
+
+(defn- min-keys [f xs]
+  (select-many-by-key min f xs))
+
+(defn- select-nodes-with-most-work [nodes]
+  (max-keys total-difficulty nodes))
+
 (defn- node->timestamp [node]
   (let [block (node->block node)]
     (coerce/to-long (:time block))))
 
-(defn- select-earliest-node [nodes]
-  (apply min-key node->timestamp nodes))
+(defn- select-earliest-nodes [nodes]
+  (min-keys node->timestamp nodes))
 
-(defn- tabulate-work [node]
-  {:node node
-   :work (total-difficulty node)})
+(defn- node->hash-code [node]
+  (let [block (node->block node)]
+    (clojure.core/hash block)))
+(defn- select-by-hash-code [nodes]
+  (min-keys node->hash-code nodes))
 
-(defn- select-nodes-with-most-work [nodes]
-  (let [nodes-with-work (map tabulate-work nodes)
-        max-work (apply max (map :work nodes-with-work))]
-    (->> nodes-with-work
-         (filter #(= max-work (:work %)))
-         (map :node))))
-
-(defn- fork-choice-rule [nodes]
+(defn- fork-choice-rule
+  "We use a fork choice rule resembling Bitcoin Core. First find the nodes with the most work, breaking ties by timestamp and for blocks mined locally use the JVM hash code"
+  [nodes]
   (-> nodes
-      select-nodes-with-most-work ;; chains with most work
-      select-earliest-node))      ;; use timestamp as tiebreaker
+      select-nodes-with-most-work
+      select-earliest-nodes
+      select-by-hash-code
+      first))
 
 (defn- collect-best-chain [chain node]
   (let [block (node->block node)
