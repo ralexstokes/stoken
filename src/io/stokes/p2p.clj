@@ -49,7 +49,10 @@
          @peer-set))
   ([{:keys [socket]} {:keys [::ip ::port]} msg]
    (let [packet (make-packet ip port msg)]
-     (udp/send-message socket packet))))
+     (try
+       (udp/send-message socket packet)
+       (catch java.net.SocketException _
+         nil)))))
 
 (defn- recv-message [socket packet]
   (udp/receive-message socket packet)
