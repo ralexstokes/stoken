@@ -4,7 +4,8 @@
             [io.stokes.p2p :as p2p]
             [io.stokes.miner :as miner]
             [io.stokes.state :as state]
-            [io.stokes.queue :as queue]))
+            [io.stokes.queue :as queue]
+            [clojure.set :as set]))
 
 (defn- cancel-miner [{:keys [channel]}]
   (when-let [cancel @channel]
@@ -47,7 +48,8 @@
 
 (defmethod dispatch :peers [{peer-set :peers} {:keys [p2p]}]
   (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
-    (run! (partial p2p/announce p2p) new-peers)))
+    (when-not (empty? (set/difference new-peers peer-set))
+      (p2p/announce p2p new-peers))))
 
 (defmethod dispatch :inventory-request [request {:keys [p2p state]}]
   (let [inventory (state/->inventory state)]

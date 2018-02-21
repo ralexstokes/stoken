@@ -23,7 +23,6 @@
    [com.stuartsierra.component :as component]
    [com.stuartsierra.component.repl :refer [reset set-init start stop system]]
    [crypto.random :as rand]
-   [udp-wrapper.core :as udp]
    [io.stokes.node :as node]
    [io.stokes.rpc :as rpc]
    [io.stokes.p2p :as p2p]
@@ -43,7 +42,8 @@
 
 ;; some convenience data for development
 
-(def seed-node-ip (.getHostAddress (udp/localhost)))
+(def seed-node-host (-> (java.net.InetAddress/getLocalHost)
+                        .getHostAddress))
 (def seed-node-port 40404)
 
 (def max-threshold-str-hard
@@ -59,7 +59,7 @@
 (def total-blocks 20)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 3)
+(def peer-count 10)
 (def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
 
 ;; mine the genesis block
@@ -98,8 +98,9 @@
 (defn- config [transactions total-blocks max-threshold-str coinbase seed-node? max-seed-for-mining]
   {:rpc              {:port 3000
                       :shutdown-timeout-ms 1000}
-   :p2p              {:port (if seed-node? seed-node-port nil)
-                      :seed-node {:ip seed-node-ip
+   :p2p              {:host seed-node-host
+                      :port (if seed-node? seed-node-port nil)
+                      :seed-node {:host seed-node-host
                                   :port seed-node-port}}
    :scheduler        {:number-of-workers 1
                       :total-blocks total-blocks}
@@ -167,7 +168,7 @@
   [node]
   (-> node
       :p2p
-      (select-keys [:io.stokes.p2p/ip :io.stokes.p2p/port :peer-set])
+      (select-keys [:io.stokes.p2p/host :io.stokes.p2p/port :peer-set])
       (update-in [:peer-set] deref)))
 
 (defn- network-connectivity [network]
@@ -178,8 +179,8 @@
 (defn- find-all-peers
   "gathers all peers across the network into a set"
   [lists]
-  (reduce (fn [set {:keys [:io.stokes.p2p/ip :io.stokes.p2p/port]}]
-            (conj set (p2p/new-peer ip port))) #{} lists))
+  (reduce (fn [set {:keys [:io.stokes.p2p/host :io.stokes.p2p/port]}]
+            (conj set (p2p/new-peer host port))) #{} lists))
 
 (defn- add-missing-peers
   "decorates each peer with the other peers it is missing"

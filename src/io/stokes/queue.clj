@@ -11,7 +11,8 @@
 
 (defn submit [queue work]
   (async/go
-    (async/>! queue work)))
+    (async/>! queue work))
+  nil)
 
 (defn- with-tag
   ([key] {tag key})
