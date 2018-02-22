@@ -42,6 +42,12 @@
   [{:keys [peer-set] :as node} peers]
   (swap! peer-set merge-peers (disj peers (node-id node))))
 
+(defn new-peer
+  ([{:keys [host port]}] (new-peer host port))
+  ([host port]
+   {::host host
+    ::port port}))
+
 ;; network interface following the example here:
 ;; http://aleph.io/examples/literate.html#aleph.examples.tcp
 
@@ -61,32 +67,39 @@
      out
      (io/decode-stream s protocol))))
 
-(defn- client-for [{:keys [::host ::port]}]
+(defn- new-client [host port]
   @(d/chain (tcp/client {:host host :port port})
             #(wrap-duplex-stream protocol %)))
 
-(defn- send-message
-  ;; TODO cache clients
-  [peer msg]
-  (let [client (client-for peer)]
-    @(s/put! client msg)
-    (s/close! client)))
+(defn- lookup-client [clients node-id]
+  (node-id @clients))
 
-(defn- broadcast [peers msg]
-  (run! #(send-message % msg) peers))
+(defn- add-client [clients host port]
+  (let [client (new-client host port)
+        peer-id (node-id (new-peer host port))]
+    (swap! clients conj {peer-id client})
+    client))
+
+(defn- client-for [{:keys [clients]} {:keys [::host ::port]}]
+  (let [peer-id (node-id (new-peer host port))]
+    (if-let [client (lookup-client clients peer-id)]
+      client
+      (add-client clients host port))))
+
+(defn- send-message
+  [node peer msg]
+  (let [client (client-for node peer)]
+    @(s/put! client msg)))
+
+(defn- broadcast [node peers msg]
+  (run! #(send-message node % msg) peers))
 
 (defn announce
   "Sends all known peers to each peer in the peer-set"
   [node peer-set]
   (let [local (node-id node)
         all-peers (conj peer-set local)]
-    (broadcast (disj peer-set local) (queue/->peer-set all-peers))))
-
-(defn new-peer
-  ([{:keys [host port]}] (new-peer host port))
-  ([host port]
-   {::host host
-    ::port port}))
+    (broadcast node (disj peer-set local) (queue/->peer-set all-peers))))
 
 (defn- start-server [handler port]
   (tcp/start-server
@@ -104,15 +117,17 @@
      ::port (server->port server)}))
 
 (defn- close-server [server]
-  (.close server)
-  (aleph.netty/wait-for-close server))
+  (.close server))
 
-(defn- stop-node [{:keys [server] :as node}]
+(defn- stop-node [{:keys [server clients] :as node}]
   (when server
     (close-server server))
+  (when clients
+    (run! #(s/close! %2) @clients))
   (-> node
       (dissoc :server)
-      (dissoc :peer-set)))
+      (dissoc :peer-set)
+      (dissoc :clients)))
 
 (defn- decorate-with-sender [info request]
   (-> request
@@ -134,9 +149,12 @@
           seed-peer (new-peer seed-node)
           peer-set (if (same-node? node seed-peer)
                      #{}
-                     #{seed-peer})]
-      (announce node peer-set)
-      (merge server node {:peer-set (atom peer-set)})))
+                     #{seed-peer})
+          clients {}
+          server (merge server node {:peer-set (atom peer-set)
+                                     :clients (atom clients)})]
+      (announce server peer-set)
+      server))
   (stop [server]
     (merge server (stop-node server))))
 
