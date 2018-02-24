@@ -187,13 +187,3 @@
   [blockchain]
   (->> (tree-seq :children :children blockchain)
        (map :block)))
-
-(comment
-  (let [genesis {:hash 0}
-        blocks (map (fn [id] {:hash id
-                              :previous-hash (dec id)}) (range 1 3))
-        chain (chain-from {:initial-state genesis})
-        tree (reduce add-to-chain chain blocks)
-        seq (tree-seq :children :children tree)]
-    (tree->blocks tree))
-  )
