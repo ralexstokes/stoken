@@ -102,13 +102,25 @@
   (= (previous b)
      (hash a)))
 
+(defn- same-block?
+  "if two blocks have the same hash, they are the same block"
+  [a b]
+  (= (hash a)
+     (hash b)))
+
+(defn- children-contains-block? [children block]
+  (let [blocks (map (comp hash :block) children)]
+    (some #{(hash block)} blocks)))
+
 (defn- insert [new-block node]
   (let [block (node->block node)
         children (node->children node)]
     (apply node-of block
-           (if (parent? block new-block)
-             (conj children (node-of new-block))
-             (map (partial insert new-block) children)))))
+           (if (children-contains-block? children new-block)
+             children
+             (if (parent? block new-block)
+               (conj children (node-of new-block))
+               (map (partial insert new-block) children))))))
 
 (defn add-to-chain [blockchain block]
   (insert block blockchain))
