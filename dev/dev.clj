@@ -290,14 +290,48 @@
        (apply map vector)
        (drop-while #(apply = %))))
 
+(defn- balances [system]
+  (->> system
+       ->nodes
+       (map :state)
+       (map state/->balances)))
+
+(defn- ledgers [system]
+  (->> system
+       ->nodes
+       (map :state)
+       (map state/->ledger)))
+
+(defn- same-balances? [system]
+  (->> system
+       balances
+       (apply =)))
+
+(defn inject-transaction [value]
+  (let [key coinbase-key
+        addr (key/->address key)
+        node (->> system
+                  ->nodes
+                  first)
+        ledger (state/->ledger (:state node))
+        queue (:queue node)
+        transactions (:transactions genesis-block)
+        genesis-transaction (first transactions)
+        input (transaction/new-input ledger
+                                     (:hash genesis-transaction)
+                                     0
+                                     (key/sign key (:hash genesis-transaction))
+                                     (key/->public key))]
+    (let [transaction (transaction/new {:inputs [input]
+                                        :outputs [(transaction/new-output value addr)]})]
+      (queue/submit-transaction queue transaction))))
+
 (defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
-               #(chain-consensus? % (:hash genesis-block))]]
+               #(chain-consensus? % (:hash genesis-block))
+               same-balances?]]
     (every? true?
             (map #(% system) tests))))
-
-(defn ledger [system] (:ledger @(:state system)))
-(defn balances [system] (state/->balances (:state system)))
 
 ;; launch a network of `peer-count` peers
 
@@ -306,6 +340,23 @@
 (comment
   ;; p2p
   (describe-network-topology system)
+
+  ;; transaction
+  (run! inject-transaction (range 1 2))
+  (->> system
+       ->nodes
+       (map :state)
+       (map state/->transactions)
+       (map #(map :hash %))
+       (apply map vector))
+
+  (->> system
+       ->nodes
+       (map :queue)
+       (map #(queue/submit-request-to-mine % :force? true)))
+
+  (balances system)
+  (same-balances? system)
 
   ;; blockchain
   (:hash genesis-block)

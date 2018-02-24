@@ -32,6 +32,15 @@
          (transaction-pool/add pool)
          (update-transaction-pool state))))
 
+(defn contains-transaction?
+  "Indicates if the given transaction is in the mempool or if it is already in the chain"
+  [state transaction]
+  (let [pool (->transaction-pool state)
+        ledger (->ledger state)]
+    (or
+     (contains? ledger (:hash transaction))
+     (contains? pool transaction))))
+
 (defn- update-state [state key f & rest]
   (swap! state (fn [state]
                  (let [val (key state)]

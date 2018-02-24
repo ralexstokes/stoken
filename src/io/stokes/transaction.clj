@@ -4,7 +4,7 @@
   (:refer-clojure :exclude [hash]))
 
 (defn hash [transaction]
-  (hash/of transaction))
+  (get transaction :hash (hash/of transaction)))
 
 (defn output-in [ledger hash index]
   (nth (get ledger hash) index))
@@ -29,19 +29,19 @@
    :script {:type :address
             :address address}})
 
-(defn for-coinbase [address subsidy block-height]
-  {:ins [{:type :coinbase-input
-          :block-height block-height}]
-   :outs [(new-output subsidy address)]})
+(defn new [points]
+  (assoc points :hash (hash points)))
 
-(defn new [{:keys [inputs outputs]}]
-  {:ins inputs
-   :outs outputs})
+(defn for-coinbase [address subsidy block-height]
+  (io.stokes.transaction/new
+   {:inputs [{:type :coinbase-input
+              :block-height block-height}]
+    :outputs [(new-output subsidy address)]}))
 
 (defn inputs [transaction]
-  (:ins transaction))
+  (:inputs transaction))
 (defn outputs [transaction]
-  (:outs transaction))
+  (:outputs transaction))
 
 (defn input->previous-hash [in]
   (get-in in [:previous-output :hash]))

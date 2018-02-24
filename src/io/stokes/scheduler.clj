@@ -33,8 +33,9 @@
   (queue/submit-request-to-mine queue))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
-  (state/add-transaction state transaction)
-  (p2p/send-transaction p2p transaction))
+  (when-not (state/contains-transaction? state transaction)
+    (state/add-transaction state transaction)
+    (p2p/send-transaction p2p transaction)))
 
 (defmethod dispatch :mine [{{:keys [force?]} :mine} {:keys [state queue miner total-blocks] :as scheduler}]
   (cancel-miner miner)
