@@ -43,7 +43,3 @@
 
 (defn inventory-request []
   (with-tag :inventory-request))
-
-(defn ->inventory [inventory]
-  (with-tag :inventory
-    inventory))

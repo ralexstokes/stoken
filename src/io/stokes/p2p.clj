@@ -175,12 +175,10 @@
                    [:queue]))
 
 (defn send-block [p2p block]
-  (send-message p2p (-> block
-                        block/readable
-                        queue/->block)))
+  (broadcast p2p (->peer-set p2p) (queue/->block block)))
 
 (defn send-transaction [p2p transaction]
-  (send-message p2p (queue/->transaction transaction)))
+  (broadcast p2p (->peer-set p2p) (queue/->transaction transaction)))
 
 (defn- select-random-peer [peer-set]
   (when-not (empty? peer-set)
@@ -192,5 +190,6 @@
   (when-let [random-peer (select-random-peer (->peer-set p2p))]
     (send-message p2p random-peer (queue/inventory-request))))
 
-(defn send-inventory [p2p peer inventory]
-  (send-message p2p peer (queue/->inventory inventory)))
+(defn send-inventory [p2p peer {:keys [blocks transactions]}]
+  (run! #(send-message p2p peer (queue/->block %)) blocks)
+  (run! #(send-message p2p peer (queue/->transaction %)) transactions))
