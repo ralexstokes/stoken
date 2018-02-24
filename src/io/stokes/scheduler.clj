@@ -86,7 +86,11 @@
   (p2p/request-inventory p2p))
 
 (defn- begin-mining [queue]
-  (queue/submit-request-to-mine queue))
+  (async/go
+    (Thread/sleep 1000)
+    ;; this is to give peers time to connect
+    ;; this is a pretty hacky solution but the proper fix will take some thorough refactoring so for now...
+    (queue/submit-request-to-mine queue)))
 
 (defn- start [{:keys [queue p2p] :as scheduler}]
   (let [workers (start-workers scheduler)]
