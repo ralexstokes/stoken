@@ -7,72 +7,74 @@
 (defn new [{:keys [ledger transaction-pool blockchain]}]
   (atom {:ledger (transaction/ledger ledger)
          :transaction-pool (transaction-pool/new transaction-pool)
-         :blockchain (block/chain-from blockchain)}))
+         :blockchain (block/chain-from blockchain)
+         :orphan-blocks #{}}))
 
-(defn ->ledger [state]
-  (:ledger @state))
-(defn ->blockchain [state]
-  (:blockchain @state))
-(defn- ->transaction-pool [state]
-  (:transaction-pool @state))
+(defn- state-writer [key f & rest]
+  (fn [state]
+    (apply update state key f rest)))
 
-(defn- update-ledger [state ledger f]
-  (swap! state (fn [state]
-                 (assoc state :ledger ledger))))
-(defn- update-blockchain [state blockchain]
-  (swap! state (fn [state]
-                 (assoc state :blockchain blockchain))))
-(defn- update-transaction-pool [state pool]
-  (swap! state (fn [state]
-                 (assoc state :transaction-pool pool))))
+(defn- reader
+  ([state reader]
+   (reader @state))
+  ([state reader & readers]
+   (let [snapshot @state]
+     (map #(% snapshot) (conj readers reader)))))
 
-(defn add-transaction [state transaction]
-  (let [pool (->transaction-pool state)]
-    (->> transaction
-         (transaction-pool/add pool)
-         (update-transaction-pool state))))
+(defn- write!
+  "takes a series of `state-writer`s"
+  [state & writers]
+  (swap! state (apply comp writers)))
 
-(defn- update-state [state key f & rest]
-  (swap! state (fn [state]
-                 (let [val (key state)]
-                   (assoc state key (apply f val rest))))))
-
-(defn- adjust-ledger [state transactions]
-  (update-state state
-                :ledger
+(defn- adjust-ledger [transactions]
+  (state-writer :ledger
                 transaction/apply-transactions-to-ledger transactions))
 
-(defn- adjust-transaction-pool [state transactions]
-  (update-state state
-                :transaction-pool
+(defn add-transaction [state transaction]
+  (write! state
+          (state-writer :transaction-pool
+                        transaction-pool/add)))
+
+(defn- remove-from-transaction-pool [transactions]
+  (state-writer :transaction-pool
                 transaction-pool/remove-transactions transactions))
 
-(defn- add-to-chain [state block]
-  (update-state state
-                :blockchain
-                block/add-to-chain block))
+(defn- add-to-chain [block]
+  (fn [state]
+    (let [orphans (:orphan-blocks state)
+          blockchain (:blockchain state)
+          [next-chain next-orphans] (block/add-to-chain blockchain (conj orphans block))]
+      (merge state {:blockchain next-chain
+                    :orphan-blocks next-orphans}))))
 
 (defn add-block [state {:keys [transactions] :as block}]
-  (adjust-ledger state transactions)
-  (adjust-transaction-pool state transactions)
-  (add-to-chain state block))
+  (write! state
+          (adjust-ledger transactions)
+          (remove-from-transaction-pool transactions)
+          (add-to-chain block)))
+
+(defn ->ledger [state]
+  (-> state
+      (reader :ledger)))
 
 (defn ->balances [state]
-  (-> state
-      ->ledger
+  (-> (->ledger state)
       transaction/ledger-balances))
 
-(defn ->best-chain [state]
+(defn ->blockchain [state]
   (-> state
-      ->blockchain
+      (reader :blockchain)))
+
+(defn ->best-chain [state]
+  (-> (->blockchain state)
       block/best-chain))
 
 (defn ->transactions [state]
-  (-> state
-      ->transaction-pool))
+  (reader state :transaction-pool))
 
 (defn ->inventory [state]
-  (let [pool (->transactions state)
-        blocks (->best-chain state)]
+  (let [[pool blocks] (reader state
+                              :transaction-pool
+                              (comp block/best-chain :blockchain))]
     {:transactions pool
      :blocks blocks}))

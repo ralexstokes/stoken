@@ -92,10 +92,6 @@
   (merge {:transactions transactions}
          (header-from chain transactions)))
 
-(defn- node-of [block & children]
-  (merge {:block block} (when children
-                          {:children children})))
-
 (defn- node->block [node]
   (:block node))
 (defn- node->children [node]
@@ -113,11 +109,15 @@
   (= (hash a)
      (hash b)))
 
+(defn- node-of [block & children]
+  (merge {:block block} (when children
+                          {:children (reduce conj #{} children)})))
+
 (defn- children-contains-block? [children block]
   (let [blocks (map (comp hash :block) children)]
     (some #{(hash block)} blocks)))
 
-(defn- insert [new-block node]
+(defn- insert [node new-block]
   (let [block (node->block node)
         children (node->children node)]
     (apply node-of block
@@ -125,10 +125,34 @@
              children
              (if (parent? block new-block)
                (conj children (node-of new-block))
-               (map (partial insert new-block) children))))))
+               (map #(insert % new-block) children))))))
 
-(defn add-to-chain [blockchain block]
-  (insert block blockchain))
+(def same-chain? =)
+
+(defn- chain-contains-block? [blockchain target-block]
+  (let [block (node->block blockchain)
+        children (node->children blockchain)]
+    (or (same-block? block target-block)
+        (some true? (map #(chain-contains-block? % target-block) children)))))
+
+(defn add-to-chain
+  "takes a blocktree and a set of blocks, possibly containing orphans; will insert all possible blocks in the set and return the updated tree along with the remaining orphans"
+  [blockchain set-of-blocks]
+  (let [blocks (into [] set-of-blocks)]
+    (if-let [[inserted-block new-chain] (->> blocks
+                                             (map #(vector % (insert blockchain %)))
+                                             (drop-while (comp (partial same-chain? blockchain) second))
+                                             first)]
+      (add-to-chain new-chain (disj set-of-blocks inserted-block))
+      [blockchain (into #{} (remove (partial chain-contains-block? blockchain) set-of-blocks))])))
+
+(defn tree->blocks
+  "collects every block in the tree into a seq of blocks"
+  [blockchain]
+  (->> (tree-seq :children #(into [] (:children %)) blockchain)
+       (map :block)))
+
+;; find the best chain in a given block tree
 
 (defn- total-difficulty [node]
   (let [block (node->block node)
@@ -181,9 +205,3 @@
 
 (defn chain-from [{genesis-block :initial-state}]
   (node-of genesis-block))
-
-(defn tree->blocks
-  "collects every block in the tree into a seq of blocks"
-  [blockchain]
-  (->> (tree-seq :children :children blockchain)
-       (map :block)))

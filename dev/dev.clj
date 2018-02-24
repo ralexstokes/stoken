@@ -56,10 +56,10 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 3)
+(def total-blocks 10)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 2)
+(def peer-count 3)
 (def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
 
 ;; mine the genesis block
@@ -122,7 +122,6 @@
 (defn peer-node-config [id]
   (-> seed-node-config
       (update-in [:p2p :port] (constantly nil))
-      (update-in [:scheduler :total-blocks] (constantly 0))
       (update-in [:miner :coinbase] (constantly (coinbase-for id)))
       (update-in [:rpc :port] #(+ % id))))
 
