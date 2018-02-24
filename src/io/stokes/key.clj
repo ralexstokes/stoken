@@ -3,6 +3,22 @@
             [io.stokes.hash :as hash]
             [base58.core :as base58]))
 
+(defn ->public [key]
+  (->> key
+       :public-key
+       .getEncoded
+       base58/encode))
+
+(defn- sign-with-key [key msg]
+  ;; TODO implement
+  (str "SIGNED:" msg))
+
+(defn sign
+  [key msg]
+  (let [hash (hash/of msg)]
+    {:hash hash
+     :signature (sign-with-key (:private-key key) hash)}))
+
 (defn- derive-address
   "performs a computation similar to the Bitcoin address derivation algorithm given a key-pair"
   [keys]
