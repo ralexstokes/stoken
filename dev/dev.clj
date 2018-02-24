@@ -56,10 +56,10 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 20)
+(def total-blocks 3)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 10)
+(def peer-count 2)
 (def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
 
 ;; mine the genesis block
@@ -122,6 +122,7 @@
 (defn peer-node-config [id]
   (-> seed-node-config
       (update-in [:p2p :port] (constantly nil))
+      (update-in [:scheduler :total-blocks] (constantly 0))
       (update-in [:miner :coinbase] (constantly (coinbase-for id)))
       (update-in [:rpc :port] #(+ % id))))
 
@@ -341,12 +342,65 @@
         deref
         :blockchain))
 
+  (defn blocktree->hashes [node]
+    (let [block (block/node->block node)
+          children (block/node->children node)
+          next (conj [] (:hash block))]
+      (if children
+        (into next (map blocktree->hashes children))
+        next)))
+
   seed-chain
+  (-> seed-chain
+      blocktree->hashes
+      flatten
+      distinct)
+
+  (->> system
+       ->nodes
+       (map :p2p)
+       (map :peer-set)
+       (map deref))
+
+  (->> system
+       ->nodes
+       (map :state)
+       (map deref)
+
+       (map block/tree->blocks)
+       ;; (map #(map block/hash %))
+       ;; (map flatten)
+       ;; (map distinct))
+       )
+
+  (def b '{:hash "2c8c13ae3fd7f371d8a94ee3470a08d488d5ebc69cd6b3361a1ff560d6cfcef", :difficulty 2, :time #inst "2018-02-24T20:43:02.369-00:00", :port 40404, :host "10.0.30.229", :transaction-root "ecb1ac2585f2184f5b8f409925f8bc17c81ca9888060b92b9b6485d7b481345", :transactions ({:ins [{:type :coinbase-input, :block-height 1}], :outs [{:type :output, :value 128, :script {:type :address, :address "kpFJBvihsMaPtKTkBavk66Ksf1H"}}]}), :previous-hash "7216994e1ae0258fa96d3d089aa05dd097c66084654fa68a481fdb024bfb0d3", :nonce 72})
+
+  (def peer (->> system
+                 ->nodes
+                 second))
+  (:state peer)
+  (def peer-chain
+    (->> peer
+         :state
+         deref
+         :blockchain))
+  peer-chain
+  (block/add-to-chain peer-chain (block/from-readable b))
 
   (healthy-network? system genesis-block)
 
   (fully-connected? system)
+
   (chain-consensus? system (:hash genesis-block))
+  (chains-same-lenth? system)
+
+  (apply-chains #(map (juxt (fn [x]
+                              (->> x
+                                   :hash
+                                   (take 3)
+                                   (apply str)))
+                            ;; :time
+                            :difficulty) %) system)
 
   (stop)
   (reset)
