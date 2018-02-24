@@ -32,7 +32,12 @@
 (defn readable
   "returns a human-readable description of the block"
   [block]
-  (assoc block :time (coerce/to-date (:time block))))
+  (update block :time coerce/to-date))
+
+(defn from-readable
+  "parses a human-readable description of the block"
+  [block]
+  (update block :time coerce/from-date))
 
 (def ^:private target-blocktime 10000) ;; milliseconds
 

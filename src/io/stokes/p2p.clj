@@ -51,12 +51,24 @@
 ;; network interface following the example here:
 ;; http://aleph.io/examples/literate.html#aleph.examples.tcp
 
+(defn to-wire [{:keys [tag] :as msg}]
+  (pr-str
+   (condp = tag
+     :block (update msg :block block/readable)
+     msg)))
+
+(defn from-wire [data]
+  (let [{:keys [tag] :as msg} (edn/read-string data)]
+    (condp = tag
+      :block (update msg :block block/from-readable)
+      msg)))
+
 (def protocol
   (gloss/compile-frame
    (gloss/finite-frame :uint32
                        (gloss/string :utf-8))
-   pr-str
-   #(edn/read-string %)))
+   to-wire
+   from-wire))
 
 (defn- wrap-duplex-stream [protocol s]
   (let [out (s/stream)]
