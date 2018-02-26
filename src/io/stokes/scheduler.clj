@@ -37,7 +37,7 @@
     (state/add-transaction state transaction)
     (p2p/send-transaction p2p transaction)))
 
-(defmethod dispatch :mine [{{:keys [force?]} :mine} {:keys [state queue miner total-blocks] :as scheduler}]
+(defmethod dispatch :mine [{force? :mine} {:keys [state queue miner total-blocks] :as scheduler}]
   (cancel-miner miner)
   (let [chain (state/->best-chain state)
         pool (state/->transactions state)]

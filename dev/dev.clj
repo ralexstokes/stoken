@@ -56,7 +56,7 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 30)
+(def total-blocks 3)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
 (def peer-count 2)

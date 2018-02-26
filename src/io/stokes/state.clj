@@ -28,7 +28,7 @@
 
 (defn- adjust-ledger [transactions]
   (state-writer :ledger
-                transaction/apply-transactions-to-ledger transactions
+                transaction/apply-transactions-to-ledger transactions))
 
 (defn add-transaction [state transaction]
   (write! state
@@ -82,8 +82,9 @@
 (defn contains-transaction?
   "Indicates if the given transaction is in the mempool or if it is already in the chain"
   [state transaction]
-  (let [pool (->transaction-pool state)
-        ledger (->ledger state)]
+  (let [[pool ledger] (reader state
+                              :transaction-pool
+                              :ledger)]
     (or
      (contains? ledger (:hash transaction))
      (contains? pool transaction))))
