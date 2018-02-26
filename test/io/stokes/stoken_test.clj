@@ -72,3 +72,7 @@
         [full-chain _] (block/add-to-chain next-chain (apply conj orphans (map block-of missing-blocks)))]
     (is (= (tree->hashes full-chain)
            (range max-hash)))))
+
+
+(comment
+  (def b '{:hash "2c8c13ae3fd7f371d8a94ee3470a08d488d5ebc69cd6b3361a1ff560d6cfcef", :difficulty 2, :time #inst "2018-02-24T20:43:02.369-00:00", :port 40404, :host "10.0.30.229", :transaction-root "ecb1ac2585f2184f5b8f409925f8bc17c81ca9888060b92b9b6485d7b481345", :transactions ({:ins [{:type :coinbase-input, :block-height 1}], :outs [{:type :output, :value 128, :script {:type :address, :address "kpFJBvihsMaPtKTkBavk66Ksf1H"}}]}), :previous-hash "7216994e1ae0258fa96d3d089aa05dd097c66084654fa68a481fdb024bfb0d3", :nonce 72}))
