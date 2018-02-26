@@ -51,13 +51,16 @@
     (when-not (empty? (set/difference new-peers peer-set))
       (p2p/announce p2p new-peers))))
 
+(defmethod dispatch :request-inventory [_ {:keys [p2p queue]}]
+  (p2p/request-inventory p2p)
+  (async/go
+    (async/<! (async/timeout (* 100
+                                (rand-int 20))))
+    (queue/submit-request-inventory queue)))
+
 (defmethod dispatch :inventory-request [request {:keys [p2p state]}]
   (let [inventory (state/->inventory state)]
     (p2p/send-inventory p2p request inventory)))
-
-(defmethod dispatch :inventory [{{:keys [transactions blocks]} :inventory} {:keys [queue]}]
-  (run! (partial queue/submit-transaction queue) transactions)
-  (run! (partial queue/submit-block queue) blocks))
 
 (defmethod dispatch :default [msg _]
   (println "unknown message type:" msg))
@@ -82,8 +85,8 @@
   (doall
    (map stop-worker workers)))
 
-(defn- query-peers [p2p]
-  (p2p/request-inventory p2p))
+(defn- begin-query-peers [queue]
+  (queue/submit-request-inventory queue))
 
 (defn- begin-mining [queue]
   (async/go
@@ -94,7 +97,7 @@
 
 (defn- start [{:keys [queue p2p] :as scheduler}]
   (let [workers (start-workers scheduler)]
-    (query-peers p2p)
+    (begin-query-peers queue)
     (begin-mining queue)
     workers))
 

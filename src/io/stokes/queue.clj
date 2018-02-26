@@ -41,5 +41,8 @@
 (defn submit-request-to-mine [queue]
   (submit queue (with-tag :mine)))
 
+(defn submit-request-inventory [queue]
+  (submit queue (with-tag :request-inventory)))
+
 (defn inventory-request []
   (with-tag :inventory-request))
