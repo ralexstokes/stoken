@@ -1,6 +1,5 @@
 (ns io.stokes.miner
-  (:require [com.stuartsierra.component :as component]
-            [io.stokes.hash :as hash]
+  (:require [io.stokes.hash :as hash]
             [io.stokes.block :as block]
             [io.stokes.transaction :as transaction]
             [io.stokes.transaction-pool :as transaction-pool]
