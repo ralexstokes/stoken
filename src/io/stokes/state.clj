@@ -28,7 +28,7 @@
 
 (defn- adjust-ledger [transactions]
   (state-writer :ledger
-                transaction/apply-transactions-to-ledger transactions))
+                transaction/apply-transactions-to-ledger transactions
 
 (defn add-transaction [state transaction]
   (write! state
