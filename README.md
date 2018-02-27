@@ -18,6 +18,6 @@ To begin an instance of the development system described in `dev/dev.clj`, open 
 
 ## Copyright and License
 
-Copyright © 2017 ralexstokes
+Copyright © 2018 ralexstokes
 
-TODO: [Choose a license](http://choosealicense.com/)
+MIT License. Refer to `LICENSE` in this repository for license info.
