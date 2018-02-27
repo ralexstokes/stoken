@@ -3,24 +3,23 @@
   (:require [io.stokes.hash :as hash])
   (:refer-clojure :exclude [hash]))
 
+;; transactions
+
 (defn hash [transaction]
   (get transaction :hash (hash/of transaction)))
 
 (defn output-in [ledger hash index]
-  (nth (get ledger hash) index))
+  (when-let [outputs (ledger hash)]
+    (nth outputs index)))
 
-(defn new-input [ledger previous-transaction-hash previous-transaction-output-index signature public-key]
+(defn new-input [previous-outputs signature public-key]
   {:post [(contains? % :type)]}
-  (let [output (output-in ledger
-                          previous-transaction-hash
-                          previous-transaction-output-index)]
-    {:type :input
-     :value (:value output)
-     :previous-output {:hash  previous-transaction-hash
-                       :index previous-transaction-output-index}
-     :script {:type :signature
-              :signature signature
-              :public-key public-key}}))
+  {:type :input
+   :value (reduce + (map :value previous-outputs))
+   :previous-outputs previous-outputs
+   :script {:type :signature
+            :signature signature
+            :public-key public-key}})
 
 (defn new-output [value address]
   {:post [(contains? % :type)]}
@@ -29,8 +28,10 @@
    :script {:type :address
             :address address}})
 
-(defn new [points]
-  (assoc points :hash (hash points)))
+(defn new
+  ([ins-and-outs] (assoc ins-and-outs :hash (hash ins-and-outs)))
+  ([inputs outputs] (io.stokes.transaction/new {:inputs inputs
+                                                :outputs outputs})))
 
 (defn for-coinbase [address subsidy block-height]
   (io.stokes.transaction/new
@@ -43,6 +44,8 @@
 (defn outputs [transaction]
   (:outputs transaction))
 
+(defn input->value [in]
+  (:value in))
 (defn input->previous-hash [in]
   (get-in in [:previous-output :hash]))
 
@@ -58,6 +61,8 @@
         outs (outputs transaction)]
     (- (reduce + (map :value ins))
        (reduce + (map :value outs)))))
+
+;; ledger -- the utxo set
 
 (defn- apply-transaction-to-ledger [ledger transaction]
   (let [ins (map input->previous-hash (inputs transaction))
