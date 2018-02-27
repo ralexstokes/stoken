@@ -8,9 +8,14 @@
 (defn hash [transaction]
   (get transaction :hash (hash/of transaction)))
 
+(defn output->out-point [output]
+  (select-keys output [:hash :index]))
+
 (defn output-in [ledger hash index]
   (when-let [outputs (ledger hash)]
-    (nth outputs index)))
+    (merge (nth outputs index)
+           {:hash hash
+            :index index})))
 
 (defn new-input [previous-outputs signature public-key]
   {:post [(contains? % :type)]}
@@ -21,12 +26,14 @@
             :signature signature
             :public-key public-key}})
 
-(defn new-output [value address]
+(defn new-output [value address & [hash index]]
   {:post [(contains? % :type)]}
-  {:type :output
-   :value value
-   :script {:type :address
-            :address address}})
+  (merge {:type :output
+          :value value
+          :script {:type :address
+                   :address address}}
+         {:hash hash
+          :index index}))
 
 (defn new
   ([ins-and-outs] (assoc ins-and-outs :hash (hash ins-and-outs)))
@@ -37,7 +44,8 @@
   (io.stokes.transaction/new
    {:inputs [{:type :coinbase-input
               :block-height block-height}]
-    :outputs [(new-output subsidy address)]}))
+    ;; use hash of address + block height as backing address
+    :outputs [(new-output subsidy address (hash/of (str address block-height)) 0)]}))
 
 (defn inputs [transaction]
   (:inputs transaction))
@@ -63,14 +71,18 @@
        (reduce + (map :value outs)))))
 
 ;; ledger -- the utxo set
+;; mapping from out-points to outputs
 
 (defn- apply-transaction-to-ledger [ledger transaction]
-  (let [ins (map input->previous-hash (inputs transaction))
-        outs (outputs transaction)
-        hash (hash transaction)]
+  (let [previous-outputs (map :previous-outputs (inputs transaction))
+        previous-out-points (map output->out-point previous-outputs)
+        hash (hash transaction)
+        outputs (outputs transaction)
+        out-points (map output->out-point outputs)
+        new-entries (into {} (map vector out-points outputs))]
     (as-> ledger l
-      (apply dissoc l ins)
-      (assoc l hash outs))))
+      (apply dissoc l previous-out-points)
+      (merge l new-entries))))
 
 (defn apply-transactions-to-ledger [ledger transactions]
   (reduce apply-transaction-to-ledger ledger transactions))
@@ -78,15 +90,12 @@
 (defn ledger [{:keys [initial-state]}]
   (apply-transactions-to-ledger {} initial-state))
 
-(defn- output->balance [out]
-  {(output->address out) (output->value out)})
-
-(defn- outputs->balances [outs]
-  (reduce (fn [balances out]
-            (merge-with + balances (output->balance out))) {} outs))
-
-(defn- update-balance [balances [_ outs]]
-  (merge-with + balances (outputs->balances outs)))
+(defn- output->balances [balances output]
+  (let [address (output->address output)
+        value (output->value output)]
+    (update balances address (fnil + 0) value)))
 
 (defn ledger-balances [ledger]
-  (reduce update-balance {} ledger))
+  (->> ledger
+       vals
+       (reduce output->balances {})))
