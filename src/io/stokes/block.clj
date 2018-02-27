@@ -129,7 +129,7 @@
 
 (def same-chain? =)
 
-(defn- chain-contains-block? [blockchain target-block]
+(defn chain-contains-block? [blockchain target-block]
   (let [block (node->block blockchain)
         children (node->children blockchain)]
     (or (same-block? block target-block)

@@ -29,8 +29,9 @@
 (defmulti dispatch queue/dispatch)
 
 (defmethod dispatch :block [{:keys [block]} {:keys [state queue] :as scheduler}]
-  (state/add-block state block)
-  (queue/submit-request-to-mine queue))
+  (when-not (state/contains-block? state block)
+    (state/add-block state block)
+    (queue/submit-request-to-mine queue)))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
   (when-not (state/contains-transaction? state transaction)
