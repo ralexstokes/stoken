@@ -333,6 +333,11 @@
        balances
        (apply =)))
 
+(defn- same-ledgers? [system]
+  (->> system
+       ledgers
+       (apply =)))
+
 (defn- from-node
   ([system ks] (from-node system ks first))
   ([system ks selector]
@@ -383,7 +388,7 @@
 (defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
                #(chain-consensus? % (:hash genesis-block))
-               same-balances?
+               same-ledgers?
                each-node-reconciles-ledger-with-chain]]
     (every? true?
             (map #(% system) tests))))
@@ -456,8 +461,12 @@
        (map :queue)
        (map #(queue/submit-request-to-mine % :force? true)))
 
-  (balances system)
-  (same-balances? system)
+
+  (let [states (mapcat #(from-node system [:state] (fn [nodes] (nth nodes %))) (range 3))
+        ledgers (map #(-> %
+                          deref
+                          :ledger) states)]
+    (apply = ledgers))
 
   (def seed-node
     (->> system
@@ -478,6 +487,10 @@
 
   (chain-consensus? system (:hash genesis-block))
   (chains-same-lenth? system)
+
+  (same-ledgers? system)
+  (same-balances? system)
+  (balances system)
 
   ;; control
   (stop)
