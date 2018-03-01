@@ -38,6 +38,8 @@
                                               :ledger)
                  max-threshold (:max-threshold miner)]
              (block/valid? chain max-threshold ledger block)))
+    (state/add-block state block)
+    (queue/submit-request-to-mine queue)))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
   (when
