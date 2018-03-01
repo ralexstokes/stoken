@@ -56,11 +56,11 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 5)
+(def total-blocks 20)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 4)
-(def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
+(def peer-count 3)
+(def max-seed-for-mining 1000000)
 
 ;; mine the genesis block
 
