@@ -86,8 +86,11 @@
 (defmulti valid-input? (fn [ledger input] (:type input)))
 
 (defmethod valid-input? :input [ledger input]
-  (every? identity (concat (map (partial contains-output? ledger) (input->previous-outputs input))
-                           (map valid-pay-to-pubkey-hash? (:scripts input)))))
+  (every?
+   identity
+   (concat
+    (map (partial contains-output? ledger) (input->previous-outputs input))
+    (map valid-pay-to-pubkey-hash? (:scripts input)))))
 
 (defmethod valid-input? :coinbase-input [_ input]
   (select-keys input [:block-height]))
