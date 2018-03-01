@@ -374,14 +374,12 @@
         total-coins-on-ledger (reduce + (vals balance))
         blockchain (node->best-chain node)
         transactions (mapcat :transactions blockchain)
-        coinbase-transactions (filter (fn [transaction]
-                                        (->> transaction
-                                             transaction/inputs
-                                             #(= :coinbase-input (:type %)))) transactions)
+        coinbase-transactions (filter transaction/coinbase? transactions)
         coinbase-outputs (mapcat transaction/outputs coinbase-transactions)
         total-coins-on-chain (reduce + (map transaction/output->value coinbase-outputs))]
-    (= total-coins-on-chain
-       total-coins-on-ledger)))
+    (>= total-coins-on-chain
+        total-coins-on-ledger)))
+
 (defn each-node-reconciles-ledger-with-chain [system]
   (every? true? (map ledger-reconciles-chain (->nodes system))))
 
@@ -448,13 +446,11 @@
        (map #(map :hash %))
        (apply map vector))
 
-
   (->> system
        ->nodes
        (map :state)
        (map deref)
        (map :ledger))
-
 
   (->> system
        ->nodes
@@ -480,13 +476,18 @@
   (chain-status system genesis-block)
 
   ;; network level checks
-
   (healthy-network? system genesis-block)
 
   (fully-connected? system)
 
   (chain-consensus? system (:hash genesis-block))
   (chains-same-lenth? system)
+
+  (each-node-reconciles-ledger-with-chain system)
+
+  (ledger-reconciles-chain (->> system
+                                ->nodes
+                                second))
 
   (same-ledgers? system)
   (same-balances? system)

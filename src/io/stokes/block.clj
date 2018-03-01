@@ -2,7 +2,8 @@
   (:require [io.stokes.hash :as hash]
             [clojure.set :as set]
             [clj-time.core :as time]
-            [clj-time.coerce :as coerce])
+            [clj-time.coerce :as coerce]
+            [io.stokes.transaction :as transaction])
   (:refer-clojure :exclude [hash]))
 
 (def ^:private block-header-keys #{:previous-hash
@@ -28,6 +29,21 @@
 
 (defn with-nonce [block nonce]
   (assoc block :nonce nonce))
+
+(defn- calculate-threshold [max-threshold difficulty]
+  (.shiftRight max-threshold difficulty))
+
+(defn- hex->bignum [str]
+  (BigInteger. str 16))
+
+(defn sealed?
+  "a proof-of-work block is sealed when the block hash is less than a threshold determined by the difficulty"
+  [block max-threshold]
+  (let [threshold (calculate-threshold max-threshold (difficulty block))
+        hash (-> block
+                 hash
+                 hex->bignum)]
+    (< hash threshold)))
 
 (defn readable
   "returns a human-readable description of the block"
@@ -71,14 +87,17 @@
                       inc)]
     (next difficulty)))
 
+(defn- transactions->root [transactions]
+  (-> transactions
+      hash/tree-of
+      hash/root-of))
+
 (defn- header-from [chain transactions]
   (let [previous-block (last chain)
         block-timestamps (map :time chain)]
     {:previous-hash    (hash previous-block)
      :difficulty       (calculate-difficulty previous-block block-timestamps)
-     :transaction-root (-> transactions
-                           hash/tree-of
-                           hash/root-of)
+     :transaction-root (transactions->root transactions)
      :time             (time/now)
      :nonce            0}))
 
@@ -205,3 +224,65 @@
 
 (defn chain-from [{genesis-block :initial-state}]
   (node-of genesis-block))
+
+(defn valid-proof-of-work? [block max-threshold]
+  (sealed? block max-threshold))
+
+(def ^:private default-forward-time-limit-in-hours 2)
+(def ^:private default-backward-time-limit-by-blocks 11)
+
+(defn median [times]
+  (let [count (count times)
+        index (/ (- count 1)
+                 2)]
+    (nth times index)))
+
+(defn- after-median-of [times new-time]
+  (let [median (median times)]
+    (time/after? new-time median)))
+
+(defn- within-hours
+  "`b` must be within `hours` time of `a`"
+  [hours a b]
+  (time/within?
+   (time/interval a (time/plus a (time/hours hours)))
+   b))
+
+(defn reasonable-time?
+  "a block cannot be equal to or before the median of the last 11 blocks; a block cannot be more than 2 hours ahead of the latest block"
+  [chain block]
+  (let [block-time (:time block)]
+    (and (after-median-of (->> chain
+                               reverse
+                               (take default-backward-time-limit-by-blocks)
+                               (map :time)) block-time)
+         (within-hours default-forward-time-limit-in-hours (->> chain
+                                                                last
+                                                                :time) block-time))))
+
+(defn proper-transactions? [ledger block]
+  (let [transactions (:transactions block)
+        coinbase-transaction (first transactions)]
+    (and (transaction/coinbase? coinbase-transaction)
+         (every? true? (map (partial transaction/valid? ledger) transactions)))))
+
+(defn valid-transaction-root? [block]
+  (let [transaction-root (:transaction-root block)
+        transactions (:transactions block)]
+    (= transaction-root
+       (transactions->root  transactions))))
+
+(defn correct-difficulty? [chain block]
+  (let [difficulty (difficulty block)
+        expected-difficulty (calculate-difficulty (last chain) (map :time chain))]
+    (= difficulty
+       expected-difficulty)))
+
+(defn valid? [chain max-threshold ledger block]
+  (and
+   (not (empty? (:transactions block)))
+   (valid-proof-of-work? block max-threshold)
+   (reasonable-time? chain block)
+   (proper-transactions? ledger block)
+   (valid-transaction-root? block)
+   (correct-difficulty? chain block)))

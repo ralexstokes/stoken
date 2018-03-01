@@ -6,7 +6,8 @@
             [io.stokes.state :as state]
             [io.stokes.queue :as queue]
             [clojure.set :as set]
-            [io.stokes.transaction :as transaction]))
+            [io.stokes.transaction :as transaction]
+            [io.stokes.block :as block]))
 
 (defn- cancel-miner [{:keys [channel]}]
   (when-let [cancel @channel]
@@ -29,14 +30,18 @@
 
 (defmulti dispatch queue/dispatch)
 
-(defmethod dispatch :block [{:keys [block]} {:keys [state queue] :as scheduler}]
-  (when-not (state/contains-block? state block)
-    (state/add-block state block)
-    (queue/submit-request-to-mine queue)))
+(defmethod dispatch :block [{:keys [block]} {:keys [state queue miner] :as scheduler}]
+  (when
+      (and (not (state/contains-block? state block))
+           (let [[chain ledger] (state/reader state
+                                              (comp block/best-chain :blockchain)
+                                              :ledger)
+                 max-threshold (:max-threshold miner)]
+             (block/valid? chain max-threshold ledger block)))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
-  (when-not
-      (and (state/contains-transaction? state transaction)
+  (when
+      (and (not (state/contains-transaction? state transaction))
            (transaction/valid? (state/->ledger state) transaction))
     (state/add-transaction state transaction)
     (p2p/send-transaction p2p transaction)))

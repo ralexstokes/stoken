@@ -57,6 +57,13 @@
               :block-height block-height}]
     :outputs [(new-output subsidy address)]}))
 
+(defn coinbase? [transaction]
+  (->> transaction
+       :inputs
+       first
+       :type
+       (= :coinbase-input)))
+
 (defn inputs [transaction]
   (:inputs transaction))
 (defn outputs [transaction]
@@ -93,19 +100,25 @@
     (map valid-pay-to-pubkey-hash? (:scripts input)))))
 
 (defmethod valid-input? :coinbase-input [_ input]
-  (:block-height input))
+  (integer? (:block-height input)))
 
 (defn- valid-inputs?
   "determines if each transaction input is valid according to its type"
   [ledger transaction]
-  (every? true? (map #(valid-input? ledger %) (inputs transaction))))
+  (and
+   (not (empty? (inputs transaction)))
+   (every? true? (map #(valid-input? ledger %) (inputs transaction)))))
 
 (defn valid-balances? [transaction]
-  (>= (reduce + (map input->value (inputs transaction)))
-      (reduce + (map output->value (outputs transaction)))))
+  (if (coinbase? transaction)
+    true
+    (>= (reduce + (map input->value (inputs transaction)))
+        (reduce + (map output->value (outputs transaction))))))
 
 (defn- valid-outputs? [transaction]
-  (valid-balances? transaction))
+  (and
+   (not (empty? (outputs transaction)))
+   (valid-balances? transaction)))
 
 (defn valid? [ledger transaction]
   (and

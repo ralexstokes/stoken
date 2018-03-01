@@ -14,7 +14,7 @@
   (fn [state]
     (apply update state key f rest)))
 
-(defn- reader
+(defn reader
   ([state reader]
    (reader @state))
   ([state reader & readers]
@@ -105,5 +105,10 @@
 (defn contains-transaction?
   "Indicates if the given transaction is in the mempool"
   [state transaction]
-  (let [pool (reader state :transaction-pool)]
-    (contains? pool transaction)))
+  (let [[pool blocks] (reader state :transaction-pool
+                              (comp block/best-chain :blockchain))
+        set-of-hashes (set (->> blocks
+                                (mapcat :transactions)
+                                (map transaction/hash)))]
+    (or (contains? pool transaction)
+        (set-of-hashes (transaction/hash transaction)))))

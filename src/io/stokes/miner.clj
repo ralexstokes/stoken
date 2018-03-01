@@ -8,25 +8,6 @@
             [clj-time.core :as time]
             [clj-time.coerce :as coerce]))
 
-(defn valid-block? [block]
-  (and (block :hash)
-       block))
-
-(defn- calculate-threshold [max-threshold difficulty]
-  (.shiftRight max-threshold difficulty))
-
-(defn- hex->bignum [str]
-  (BigInteger. str 16))
-
-(defn- sealed?
-  "a proof-of-work block is sealed when the block hash is less than a threshold determined by the difficulty"
-  [block max-threshold]
-  (let [threshold (calculate-threshold max-threshold (block/difficulty block))
-        hash (-> block
-                 block/hash
-                 hex->bignum)]
-    (< hash threshold)))
-
 (defn- prepare-block [block nonce]
   (block/with-nonce block nonce))
 
@@ -35,7 +16,7 @@
          nonce seed]
     (when (pos? count)
       (let [block (prepare-block block nonce)]
-        (if (sealed? block max-threshold)
+        (if (block/sealed? block max-threshold)
           (assoc block :hash (block/hash block))
           (recur (dec count)
                  (inc nonce)))))))
