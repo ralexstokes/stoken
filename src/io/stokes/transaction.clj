@@ -93,7 +93,7 @@
     (map valid-pay-to-pubkey-hash? (:scripts input)))))
 
 (defmethod valid-input? :coinbase-input [_ input]
-  (select-keys input [:block-height]))
+  (:block-height input))
 
 (defn- valid-inputs?
   "determines if each transaction input is valid according to its type"
