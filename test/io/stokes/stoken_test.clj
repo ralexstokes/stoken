@@ -1,7 +1,9 @@
 (ns io.stokes.stoken-test
   (:require
    [clojure.test :refer [deftest is]]
-   [io.stokes.block :as block]))
+   [io.stokes.block :as block]
+   [io.stokes.key :as key]
+   [io.stokes.hash :as hash]))
 
 (def children-contains-block? #'block/children-contains-block?)
 (def blockchain-contains-block? #'block/chain-contains-block?)
@@ -73,6 +75,19 @@
     (is (= (tree->hashes full-chain)
            (range max-hash)))))
 
+(deftest can-match-address-to-public-key
+  (let [keys (io.stokes.key/new-pair)
+        pub-key (key/->public keys)
+        addr (key/->address keys)]
+    (is (and (key/yields-address? pub-key addr)
+             (not (key/yields-address? pub-key (take 5 addr)))))))
 
-(comment
-  (def b '{:hash "2c8c13ae3fd7f371d8a94ee3470a08d488d5ebc69cd6b3361a1ff560d6cfcef", :difficulty 2, :time #inst "2018-02-24T20:43:02.369-00:00", :port 40404, :host "10.0.30.229", :transaction-root "ecb1ac2585f2184f5b8f409925f8bc17c81ca9888060b92b9b6485d7b481345", :transactions ({:ins [{:type :coinbase-input, :block-height 1}], :outs [{:type :output, :value 128, :script {:type :address, :address "kpFJBvihsMaPtKTkBavk66Ksf1H"}}]}), :previous-hash "7216994e1ae0258fa96d3d089aa05dd097c66084654fa68a481fdb024bfb0d3", :nonce 72}))
+(deftest can-verify-signatures
+  (let [keys (io.stokes.key/new-pair)
+        msg "hi-there-world"
+        {:keys [hash signature] :as sig} (io.stokes.key/sign keys msg)]
+    (is (and (key/verify keys sig)
+             (key/verify (key/->public keys)
+                         hash signature)
+             (not (key/verify (key/->public keys)
+                              (hash/of hash) signature))))))

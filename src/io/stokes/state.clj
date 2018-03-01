@@ -31,16 +31,16 @@
           (state-writer :transaction-pool
                         transaction-pool/add transaction)))
 
-(defn- adjust-ledger
+(defn- compute-ledger
   "should be called atomically with `add-to-chain`; see `add-block`"
   [state]
   (let [transactions (->> state
                           :blockchain
                           block/best-chain
-                          last
-                          :transactions)]
+                          (mapcat :transactions))
+        ledger {}]
     (update state :ledger
-            (fn [ledger] (transaction/apply-transactions-to-ledger ledger transactions)))))
+            (fn [_] (transaction/apply-transactions-to-ledger ledger transactions)))))
 
 (defn- remove-from-transaction-pool
   "should be called atomically with `add-to-chain`; see `add-block`"
@@ -64,7 +64,7 @@
 (defn add-block [state block]
   (write! state
           (add-to-chain block) ;; this happens first so we can include the proper transactions in the next actions
-          adjust-ledger
+          compute-ledger
           remove-from-transaction-pool))
 
 (defn ->ledger [state]

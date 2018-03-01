@@ -3,33 +3,40 @@
             [io.stokes.hash :as hash]
             [base58.core :as base58]))
 
-(defn ->public [key]
-  (->> key
-       :public-key
-       .getEncoded
-       base58/encode))
+(defn ->public [keys]
+  (ecc/x962-encode (:public-key keys)))
+(defn ->private [keys]
+  (:private-key keys))
 
-(defn- sign-with-key [key msg]
-  ;; TODO implement
-  (str "SIGNED:" msg))
+(def sign-hash-with-keys ecc/sign-hash)
 
 (defn sign
-  [key msg]
+  [keys msg]
   (let [hash (hash/of msg)]
     {:hash hash
-     :signature (sign-with-key (:private-key key) hash)}))
+     :signature (sign-hash-with-keys (->private keys) hash)}))
+
+(defn verify
+  ([keys {:keys [hash signature]}]
+   (verify (->public keys) hash signature))
+  ([public-key hash signature]
+   (ecc/verify-signature-from-hash public-key hash signature)))
+
+(defn- derive-address-from-encoded-public-key [enc-pub-key]
+  (->> enc-pub-key
+       .getBytes
+       hash/of-byte-array
+       (take 20)
+       base58/encode))
 
 (defn- derive-address
   "performs a computation similar to the Bitcoin address derivation algorithm given a key-pair"
   [keys]
   (->> keys
-       :public-key
-       .getEncoded
-       hash/of-byte-array
-       (take 20)
-       base58/encode))
+       ->public
+       derive-address-from-encoded-public-key))
 
-(defn new
+(defn new-pair
   "returns a new key pair with derived address"
   []
   (let [keys (ecc/generate-address-pair)]
@@ -37,3 +44,10 @@
 
 (defn ->address [keys]
   (:address keys))
+
+(defn yields-address? [encoded-public-key address]
+  (= address
+     (derive-address-from-encoded-public-key encoded-public-key)))
+
+(defn validates-signature? [public-key signature hash]
+  (verify public-key hash signature))

@@ -72,7 +72,7 @@
   [str]
   (hex->bignum str))
 
-(def some-keys (repeatedly key/new))
+(defonce some-keys (repeatedly key/new-pair))
 (def coinbase-key (first some-keys))
 
 (defn- coinbase-key-for [node-number]
@@ -94,7 +94,7 @@
         block
         (recur (miner/mine miner chain transaction-pool))))))
 
-(def genesis-block
+(defonce genesis-block
   (mine-until-sealed [] (transaction-pool/new {}) coinbase))
 
 ;; tools to construct a network of many nodes
@@ -308,17 +308,25 @@
      :heads heads
      :head-consensus? head-consensus?}))
 
+(defn- ->balance [node]
+  (->> node
+       :state
+       state/->balances))
+
 (defn- balances [system]
   (->> system
        ->nodes
-       (map :state)
-       (map state/->balances)))
+       (map ->balance)))
+
+(defn- ->ledger [node]
+  (->> node
+       :state
+       state/->ledger))
 
 (defn- ledgers [system]
   (->> system
        ->nodes
-       (map :state)
-       (map state/->ledger)))
+       (map ->ledger)))
 
 (defn- same-balances? [system]
   (->> system
@@ -334,30 +342,49 @@
         vals
         (into []))))
 
-(defn- transaction-for [system from-key to-key value]
-  (let [[state] (from-node system [:state])
-        ledger (:ledger @state)
-        transactions (:transactions genesis-block)
-        genesis-transaction (first transactions)
-        output (transaction/output-in ledger (:hash genesis-transaction) 0)
-        input (transaction/new-input
-               [output]
-               (key/sign from-key (:hash genesis-transaction))
-               (key/->public from-key))]
-    (transaction/new {:inputs [input]
-                      :outputs [(transaction/new-output value (key/->address to-key))
-                                (transaction/new-output (- (:value input)
-                                                           value) (key/->address from-key))]})))
+(defn- transaction-for
+  "makes a transaction that spends `value` from the `out-points` and then returns the remainder to the sender"
+  [ledger from-keys to-keys value out-points]
+  (let [previous-outputs (map (partial transaction/output-from-out-point ledger) out-points)
+        proofs (map (partial transaction/generate-output-proof from-keys) previous-outputs)
+        input (transaction/new-input previous-outputs proofs)
+        inputs [input]
+        outputs [(transaction/new-output value (key/->address to-keys))
+                 (transaction/new-output (- (transaction/input->value input)
+                                            value) (key/->address from-keys))]]
+    (transaction/new inputs outputs)))
 
-(defn inject-transaction [system {:keys [from-key to-key value]}]
-  (let [transaction (transaction-for system from-key to-key value)
-        [queue] (from-node system [:queue])]
-    (queue/submit-transaction queue transaction)))
+(defn inject-transaction
+  ([system transaction-data]
+   (let [[queue state] (from-node system [:queue :state])
+         ledger (:ledger @state)]
+     (inject-transaction queue ledger transaction-data)))
+  ([queue ledger {:keys [from-keys to-keys value previous-out-points]}]
+   (let [transaction (transaction-for ledger from-keys to-keys value previous-out-points)]
+     (queue/submit-transaction queue transaction))))
+
+
+(defn ledger-reconciles-chain [node]
+  (let [balance (->balance node)
+        total-coins-on-ledger (reduce + (vals balance))
+        blockchain (node->best-chain node)
+        transactions (mapcat :transactions blockchain)
+        coinbase-transactions (filter (fn [transaction]
+                                        (->> transaction
+                                             transaction/inputs
+                                             #(= :coinbase-input (:type %)))) transactions)
+        coinbase-outputs (mapcat transaction/outputs coinbase-transactions)
+        total-coins-on-chain (reduce + (map transaction/output->value coinbase-outputs))]
+    (= total-coins-on-chain
+       total-coins-on-ledger)))
+(defn each-node-reconciles-ledger-with-chain [system]
+  (every? true? (map ledger-reconciles-chain (->nodes system))))
 
 (defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
                #(chain-consensus? % (:hash genesis-block))
-               same-balances?]]
+               same-balances?
+               each-node-reconciles-ledger-with-chain]]
     (every? true?
             (map #(% system) tests))))
 
@@ -372,18 +399,43 @@
   (chain-walks-consistent? system)
   (compare-chains-by-hash system)
   (apply-chains chain->genesis-block-hash system)
-  (apply-chains chain->head-block-hash system)
+  (apply-chains chain->head-block-hash system))
+
+(comment
+  ;; tests transaction construction and validation
+  ;; should move into test/ but need a way to restore genesis state and the requisite key first
+  (let [ledger (->> system
+                    ->nodes
+                    first
+                    :state
+                    deref
+                    :ledger)
+        from-keys      (coinbase-key-for 0)
+        to-keys        (coinbase-key-for 1)
+        value 10
+        transactions (:transactions genesis-block)
+        genesis-transaction (first transactions)
+        out-points [(-> genesis-transaction
+                        :outputs
+                        first
+                        (select-keys [:hash :index]))] ;; have to treat coinbase output in special way
+        transaction (transaction-for ledger from-keys to-keys value out-points)]
+    (#'transaction/apply-transaction-to-ledger ledger transaction))
   )
 
 (comment
   ;; transaction
-  (let [[first second & _] (->> system
-                                ->nodes)]
-    (inject-transaction system {:from-key (coinbase-key-for 0)
-                                :to-key (coinbase-key-for 1)
+  (let [transactions (:transactions genesis-block)
+        genesis-transaction (first transactions)
+        out-points [(-> genesis-transaction
+                        :outputs
+                        first
+                        (select-keys [:hash :index]))]]
+    (inject-transaction system {:from-keys (coinbase-key-for 0)
+                                :to-keys (coinbase-key-for 1)
+                                :previous-out-points out-points
                                 :value 10}))
 
-  ;; (run! inject-transaction (range 1 2))
   (->> system
        ->nodes
        (map :state)
@@ -391,20 +443,13 @@
        (map #(map :hash %))
        (apply map vector))
 
+
   (->> system
        ->nodes
        (map :state)
        (map deref)
-       (map :blockchain)
-       first
-       block/best-chain)
-  ;; (mapcat :transactions))
+       (map :ledger))
 
-  (->> (from-node system [:state] )
-       first
-       deref
-       :ledger)
-  (:transactions genesis-block)
 
   (->> system
        ->nodes
@@ -438,3 +483,4 @@
   (stop)
   (reset)
   )
+
