@@ -24,20 +24,34 @@
 (defn- write!
   "takes a series of `state-writer`s"
   [state & writers]
-  (swap! state (apply comp writers)))
-
-(defn- adjust-ledger [transactions]
-  (state-writer :ledger
-                transaction/apply-transactions-to-ledger transactions))
+  (swap! state (apply comp (reverse writers))))
 
 (defn add-transaction [state transaction]
   (write! state
           (state-writer :transaction-pool
-                        transaction-pool/add)))
+                        transaction-pool/add transaction)))
 
-(defn- remove-from-transaction-pool [transactions]
-  (state-writer :transaction-pool
-                transaction-pool/remove-transactions transactions))
+(defn- compute-ledger
+  "should be called atomically with `add-to-chain`; see `add-block`"
+  [state]
+  (let [transactions (->> state
+                          :blockchain
+                          block/best-chain
+                          (mapcat :transactions))
+        ledger {}]
+    (update state :ledger
+            (fn [_] (transaction/apply-transactions-to-ledger ledger transactions)))))
+
+(defn- remove-from-transaction-pool
+  "should be called atomically with `add-to-chain`; see `add-block`"
+  [state]
+  (let [transactions (-> state
+                         :blockchain
+                         block/best-chain
+                         last
+                         :transactions)]
+    (update state :transaction-pool
+            transaction-pool/remove-transactions transactions)))
 
 (defn- add-to-chain [block]
   (fn [state]
@@ -47,11 +61,11 @@
       (merge state {:blockchain next-chain
                     :orphan-blocks next-orphans}))))
 
-(defn add-block [state {:keys [transactions] :as block}]
+(defn add-block [state block]
   (write! state
-          (adjust-ledger transactions)
-          (remove-from-transaction-pool transactions)
-          (add-to-chain block)))
+          (add-to-chain block) ;; this happens first so we can include the proper transactions in the next actions
+          compute-ledger
+          remove-from-transaction-pool))
 
 (defn ->ledger [state]
   (-> state
@@ -78,3 +92,18 @@
                               (comp block/best-chain :blockchain))]
     {:transactions pool
      :blocks blocks}))
+
+(defn contains-block?
+  "Indicates if the given block is in the chain or the orphan set"
+  [state block]
+  (let [[blockchain orphan-blocks] (reader state
+                                           :blockchain
+                                           :orphan-blocks)]
+    (or (block/chain-contains-block? blockchain block)
+        (contains? orphan-blocks block))))
+
+(defn contains-transaction?
+  "Indicates if the given transaction is in the mempool"
+  [state transaction]
+  (let [pool (reader state :transaction-pool)]
+    (contains? pool transaction)))

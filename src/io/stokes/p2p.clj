@@ -84,7 +84,7 @@
             #(wrap-duplex-stream protocol %)))
 
 (defn- lookup-client [clients node-id]
-  (node-id @clients))
+  (get @clients node-id))
 
 (defn- add-client [clients host port]
   (let [client (new-client host port)
@@ -98,10 +98,15 @@
       client
       (add-client clients host port))))
 
+(defn- wrap-with-sender
+  "in lieu of massive code change, we temporarily just send all messages back to a given client's (listening) server; we attach the address data here"
+  [msg node]
+  (merge msg (node-id node)))
+
 (defn- send-message
   [node peer msg]
   (let [client (client-for node peer)]
-    @(s/put! client msg)))
+    @(s/put! client (wrap-with-sender msg node))))
 
 (defn- broadcast [node peers msg]
   (run! #(send-message node % msg) peers))
@@ -141,17 +146,10 @@
       (dissoc :peer-set)
       (dissoc :clients)))
 
-(defn- decorate-with-sender [info request]
-  (-> request
-      (assoc ::host (:remote-addr info))
-      (assoc ::port (:server-port info))))
-
 (defn make-handler [queue]
   (fn [s info]
     (s/consume
-     #(->> %
-           (decorate-with-sender info)
-           (queue/submit queue))
+     (partial queue/submit queue)
      s)))
 
 (defrecord Server [host port queue seed-node]

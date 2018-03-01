@@ -38,8 +38,8 @@
 (defn submit-block [queue block]
   (submit queue (->block block)))
 
-(defn submit-request-to-mine [queue]
-  (submit queue (with-tag :mine)))
+(defn submit-request-to-mine [queue & {:keys [force?]}]
+  (submit queue (with-tag :mine force?)))
 
 (defn submit-request-inventory [queue]
   (submit queue (with-tag :request-inventory)))

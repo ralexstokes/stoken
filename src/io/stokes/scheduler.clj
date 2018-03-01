@@ -5,7 +5,8 @@
             [io.stokes.miner :as miner]
             [io.stokes.state :as state]
             [io.stokes.queue :as queue]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [io.stokes.transaction :as transaction]))
 
 (defn- cancel-miner [{:keys [channel]}]
   (when-let [cancel @channel]
@@ -29,14 +30,18 @@
 (defmulti dispatch queue/dispatch)
 
 (defmethod dispatch :block [{:keys [block]} {:keys [state queue] :as scheduler}]
-  (state/add-block state block)
-  (queue/submit-request-to-mine queue))
+  (when-not (state/contains-block? state block)
+    (state/add-block state block)
+    (queue/submit-request-to-mine queue)))
 
 (defmethod dispatch :transaction [{:keys [transaction]} {:keys [state p2p]}]
-  (state/add-transaction state transaction)
-  (p2p/send-transaction p2p transaction))
+  (when-not
+      (and (state/contains-transaction? state transaction)
+           (transaction/valid? (state/->ledger state) transaction))
+    (state/add-transaction state transaction)
+    (p2p/send-transaction p2p transaction)))
 
-(defmethod dispatch :mine [{{:keys [force?]} :mine} {:keys [state queue miner total-blocks] :as scheduler}]
+(defmethod dispatch :mine [{force? :mine} {:keys [state queue miner total-blocks] :as scheduler}]
   (cancel-miner miner)
   (let [chain (state/->best-chain state)
         pool (state/->transactions state)]
@@ -54,7 +59,7 @@
 (defmethod dispatch :request-inventory [_ {:keys [p2p queue]}]
   (p2p/request-inventory p2p)
   (async/go
-    (async/<! (async/timeout (* 100
+    (async/<! (async/timeout (* 1000
                                 (rand-int 20))))
     (queue/submit-request-inventory queue)))
 
@@ -70,7 +75,10 @@
     (async/go-loop [[msg channel] (async/alts! [stop queue])]
       (when-not (= channel stop)
         (when msg
-          (dispatch msg scheduler)
+          (try
+            (dispatch msg scheduler)
+            (catch Exception e
+              (prn e)))
           (recur (async/alts! [stop queue])))))
     stop))
 

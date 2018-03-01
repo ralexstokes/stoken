@@ -56,11 +56,11 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 30)
+(def total-blocks 20)
 (def max-threshold-str max-threshold-str-easy)
 (def seed-node? true)
-(def peer-count 2)
-(def max-seed-for-mining 0) ;; 1000000 ;; 0 should imply more deterministic runs
+(def peer-count 3)
+(def max-seed-for-mining 1000000)
 
 ;; mine the genesis block
 
@@ -72,11 +72,15 @@
   [str]
   (hex->bignum str))
 
-(def some-keys (repeatedly key/new))
+(defonce some-keys (repeatedly key/new-pair))
 (def coinbase-key (first some-keys))
+
+(defn- coinbase-key-for [node-number]
+  (nth some-keys node-number))
+
 (defn- coinbase-for [node-number]
-  (-> some-keys
-      (nth node-number)
+  (-> node-number
+      coinbase-key-for
       key/->address))
 
 (def coinbase (coinbase-for 0))
@@ -90,7 +94,7 @@
         block
         (recur (miner/mine miner chain transaction-pool))))))
 
-(def genesis-block
+(defonce genesis-block
   (mine-until-sealed [] (transaction-pool/new {}) coinbase))
 
 ;; tools to construct a network of many nodes
@@ -267,13 +271,16 @@
          (map (comp not nil?))
          (every? true?))))
 
+(defn- head-consensus? [system]
+  (apply = (apply-chains chain->head-block-hash system)))
+
 (defn- chain-consensus?
   "indicates if every peer in the system has the same view of the chain's head"
   [system genesis-block-hash]
   (and
    (genesis-consensus? system genesis-block-hash)
    (chain-walks-consistent? system)
-   (apply = (apply-chains chain->head-block-hash system))))
+   (head-consensus? system)))
 
 (defn- chains-same-lenth? [system]
   (apply = (apply-chains count system)))
@@ -289,41 +296,190 @@
        (apply map vector)
        (drop-while #(apply = %))))
 
+(defn- chain-status [system genesis-block]
+  (let [genesis-hash (:hash genesis-block)
+        genesis-consensus? (genesis-consensus? system genesis-hash)
+        block-counts (apply-chains count system)
+        heads (apply-chains chain->head-block-hash system)
+        head-consensus? (head-consensus? system)]
+    {:genesis-hash genesis-hash
+     :genesis-consensus? genesis-consensus?
+     :block-counts block-counts
+     :heads heads
+     :head-consensus? head-consensus?}))
+
+(defn- ->balance [node]
+  (->> node
+       :state
+       state/->balances))
+
+(defn- balances [system]
+  (->> system
+       ->nodes
+       (map ->balance)))
+
+(defn- ->ledger [node]
+  (->> node
+       :state
+       state/->ledger))
+
+(defn- ledgers [system]
+  (->> system
+       ->nodes
+       (map ->ledger)))
+
+(defn- same-balances? [system]
+  (->> system
+       balances
+       (apply =)))
+
+(defn- same-ledgers? [system]
+  (->> system
+       ledgers
+       (apply =)))
+
+(defn- from-node
+  ([system ks] (from-node system ks first))
+  ([system ks selector]
+   (->> (select-keys (->> system
+                          ->nodes
+                          selector) ks)
+        vals
+        (into []))))
+
+(defn- transaction-for
+  "makes a transaction that spends `value` from the `out-points` and then returns the remainder to the sender"
+  [ledger from-keys to-keys value out-points]
+  (let [previous-outputs (map (partial transaction/output-from-out-point ledger) out-points)
+        proofs (map (partial transaction/generate-output-proof from-keys) previous-outputs)
+        input (transaction/new-input previous-outputs proofs)
+        inputs [input]
+        outputs [(transaction/new-output value (key/->address to-keys))
+                 (transaction/new-output (- (transaction/input->value input)
+                                            value) (key/->address from-keys))]]
+    (transaction/new inputs outputs)))
+
+(defn inject-transaction
+  ([system transaction-data]
+   (let [[queue state] (from-node system [:queue :state])
+         ledger (:ledger @state)]
+     (inject-transaction queue ledger transaction-data)))
+  ([queue ledger {:keys [from-keys to-keys value previous-out-points]}]
+   (let [transaction (transaction-for ledger from-keys to-keys value previous-out-points)]
+     (queue/submit-transaction queue transaction))))
+
+
+(defn ledger-reconciles-chain [node]
+  (let [balance (->balance node)
+        total-coins-on-ledger (reduce + (vals balance))
+        blockchain (node->best-chain node)
+        transactions (mapcat :transactions blockchain)
+        coinbase-transactions (filter (fn [transaction]
+                                        (->> transaction
+                                             transaction/inputs
+                                             #(= :coinbase-input (:type %)))) transactions)
+        coinbase-outputs (mapcat transaction/outputs coinbase-transactions)
+        total-coins-on-chain (reduce + (map transaction/output->value coinbase-outputs))]
+    (= total-coins-on-chain
+       total-coins-on-ledger)))
+(defn each-node-reconciles-ledger-with-chain [system]
+  (every? true? (map ledger-reconciles-chain (->nodes system))))
+
 (defn- healthy-network? [system genesis-block]
   (let [tests [fully-connected?
-               #(chain-consensus? % (:hash genesis-block))]]
+               #(chain-consensus? % (:hash genesis-block))
+               same-ledgers?
+               each-node-reconciles-ledger-with-chain]]
     (every? true?
             (map #(% system) tests))))
-
-(defn ledger [system] (:ledger @(:state system)))
-(defn balances [system] (state/->balances (:state system)))
 
 ;; launch a network of `peer-count` peers
 
 (set-init (fn [_] (network-of {:peer-count peer-count})))
 
-(comment
-  ;; p2p
-  (describe-network-topology system)
-
-  ;; blockchain
-  (:hash genesis-block)
-  (genesis-consensus? system (:hash genesis-block))
-  (apply-chains count system)
-  (chains-same-lenth? system)
+(comment ;; some utilities
   (apply-chains #(map :hash %) system)
+  (apply-chains #(map :transactions %) system)
   (apply-chains #(map :difficulty %) system)
-
   (chain-walks-consistent? system)
   (compare-chains-by-hash system)
-
   (apply-chains chain->genesis-block-hash system)
-  (apply-chains chain->head-block-hash system)
+  (apply-chains chain->head-block-hash system))
+
+(comment
+  ;; tests transaction construction and validation
+  ;; should move into test/ but need a way to restore genesis state and the requisite key first
+  (let [ledger (->> system
+                    ->nodes
+                    first
+                    :state
+                    deref
+                    :ledger)
+        from-keys      (coinbase-key-for 0)
+        to-keys        (coinbase-key-for 1)
+        value 10
+        transactions (:transactions genesis-block)
+        genesis-transaction (first transactions)
+        out-points [(-> genesis-transaction
+                        :outputs
+                        first
+                        (select-keys [:hash :index]))] ;; have to treat coinbase output in special way
+        transaction (transaction-for ledger from-keys to-keys value out-points)]
+    (#'transaction/apply-transaction-to-ledger ledger transaction))
+  )
+
+(comment
+  ;; transaction
+  (let [transactions (:transactions genesis-block)
+        genesis-transaction (first transactions)
+        out-points [(-> genesis-transaction
+                        :outputs
+                        first
+                        (select-keys [:hash :index]))]]
+    (inject-transaction system {:from-keys (coinbase-key-for 0)
+                                :to-keys (coinbase-key-for 1)
+                                :previous-out-points out-points
+                                :value 10}))
+
+  (->> system
+       ->nodes
+       (map :state)
+       (map state/->transactions)
+       (map #(map :hash %))
+       (apply map vector))
+
+
+  (->> system
+       ->nodes
+       (map :state)
+       (map deref)
+       (map :ledger))
+
+
+  (->> system
+       ->nodes
+       (map :queue)
+       (map #(queue/submit-request-to-mine % :force? true)))
+
+
+  (let [states (mapcat #(from-node system [:state] (fn [nodes] (nth nodes %))) (range 3))
+        ledgers (map #(-> %
+                          deref
+                          :ledger) states)]
+    (apply = ledgers))
 
   (def seed-node
     (->> system
          ->nodes
          first))
+
+  ;; p2p
+  (describe-network-topology system)
+
+  ;; blockchain
+  (chain-status system genesis-block)
+
+  ;; network level checks
 
   (healthy-network? system genesis-block)
 
@@ -332,14 +488,12 @@
   (chain-consensus? system (:hash genesis-block))
   (chains-same-lenth? system)
 
-  (apply-chains #(map (juxt (fn [x]
-                              (->> x
-                                   :hash
-                                   (take 3)
-                                   (apply str)))
-                            ;; :time
-                            :difficulty) %) system)
+  (same-ledgers? system)
+  (same-balances? system)
+  (balances system)
 
+  ;; control
   (stop)
   (reset)
   )
+
