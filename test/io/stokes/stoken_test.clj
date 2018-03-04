@@ -17,9 +17,13 @@
 
 (defn- block-of [i]
   {:previous-hash i
+   :transactions [{:inputs [{:type :coinbase-input
+                             :block-height (inc i)}]}]
    :hash (inc i)})
 
-(def genesis {:hash 0})
+(def genesis {:hash 0
+              :transactions [{:inputs [{:type :coinbase-input
+                                        :block-height 0}]}]})
 (def chain (block/chain-from {:initial-state genesis}))
 
 (defn- inject-block [[chain orphans] next]

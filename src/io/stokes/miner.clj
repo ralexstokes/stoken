@@ -31,23 +31,9 @@
   "how many nonces to search for a solution"
   250)
 
-(def ^:private default-halving-frequency
-  "how many blocks occur since the last time the block reward halved"
-  5000)
-
-(def ^:private default-base-block-reward
-  "the largest block reward that will ever be claimed"
-  128)
-
-(defn- calculate-subsidy [chain halving-frequency base-block-reward]
-  (let [height (count chain)
-        halvings (quot height halving-frequency)]
-    (int (quot base-block-reward
-               (Math/pow 2 halvings)))))
-
 (defn- derive-next-block [chain coinbase transaction-pool halving-frequency base-block-reward]
   (let [transactions (select-transactions transaction-pool)
-        subsidy (calculate-subsidy chain halving-frequency base-block-reward)
+        subsidy (block/calculate-subsidy (count chain) halving-frequency base-block-reward)
         block-fees (reduce + (map transaction/fee transactions))
         coinbase-transaction (->coinbase-transaction coinbase subsidy (count chain) block-fees)]
     (block/next-template chain (conj transactions
@@ -60,8 +46,8 @@
                     max-threshold
                     max-seed]
              :or {number-of-rounds default-number-of-rounds
-                  halving-frequency default-halving-frequency
-                  base-block-reward default-base-block-reward}}
+                  halving-frequency block/default-halving-frequency
+                  base-block-reward block/default-base-block-reward}}
             chain transaction-pool]
   (let [seed (rand-int max-seed)
         next-block (derive-next-block chain coinbase transaction-pool halving-frequency base-block-reward)]

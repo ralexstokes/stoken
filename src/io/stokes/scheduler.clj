@@ -39,8 +39,10 @@
            (let [[chain ledger] (state/reader state
                                               :blockchain
                                               :ledger)
-                 max-threshold (:max-threshold miner)]
-             (block/valid? chain max-threshold ledger block)))
+                 {:keys [max-threshold
+                         halving-frequency
+                         base-block-reward]} miner]
+             (block/valid? chain max-threshold ledger block halving-frequency base-block-reward)))
     (state/add-block state block)
     (queue/submit-request-to-mine queue)))
 

@@ -6,6 +6,19 @@
             [io.stokes.transaction :as transaction])
   (:refer-clojure :exclude [hash]))
 
+(def default-halving-frequency
+  "how many blocks occur since the last time the block reward halved"
+  5000)
+
+(def default-base-block-reward
+  "the largest block reward that will ever be claimed"
+  128)
+
+(defn calculate-subsidy [height halving-frequency base-block-reward]
+  (let [halvings (quot height halving-frequency)]
+    (int (quot base-block-reward
+               (Math/pow 2 halvings)))))
+
 (def ^:private block-header-keys #{:previous-hash
                                    :difficulty
                                    :transaction-root
@@ -116,11 +129,22 @@
 (defn- node->children [node]
   (:children node))
 
+(defn block->height [block]
+  (let [transactions (:transactions block)
+        [coinbase] (filter transaction/coinbase? transactions)
+        {:keys [block-height]} (-> coinbase
+                                   transaction/inputs
+                                   first)]
+    block-height))
+
 (defn- parent?
-  "indicates if block `parent` is a parent of block `child`"
+  "indicates if block `parent` is a parent of block `child`; NOTE: we add the check for block height to ensure the block subsidies are correct in combination with `valid?`"
   [parent child]
-  (= (previous child)
-     (hash parent)))
+  (and
+   (= (previous child)
+      (hash parent))
+   (= (block->height child)
+      (inc (block->height parent)))))
 
 (defn- same-block?
   "if two blocks have the same hash, they are the same block"
@@ -260,10 +284,26 @@
                                                                 last
                                                                 :time) block-time))))
 
-(defn proper-transactions? [ledger block]
+(defn subsidy-correct? [coinbase halving-frequency base-block-reward]
+  (let [halving-frequency (or halving-frequency
+                              default-halving-frequency)
+        base-block-reward (or base-block-reward
+                              default-base-block-reward)
+        {:keys [block-height]} (-> coinbase
+                                   transaction/inputs
+                                   first)
+        value (-> coinbase
+                  transaction/outputs
+                  first
+                  transaction/output->value)]
+    (= value
+       (calculate-subsidy block-height halving-frequency base-block-reward))))
+
+(defn proper-transactions? [ledger block halving-frequency base-block-reward]
   (let [transactions (:transactions block)
         coinbase-transaction (first transactions)]
     (and (transaction/coinbase? coinbase-transaction)
+         (subsidy-correct? coinbase-transaction halving-frequency base-block-reward)
          (every? false? (map transaction/coinbase? (rest transactions)))
          (every? true? (map (partial transaction/valid? ledger) transactions)))))
 
@@ -281,17 +321,14 @@
   (when-let [candidate-block (find-previous-block chain block)]
     (let [difficulty (difficulty block)
           expected-difficulty (calculate-difficulty candidate-block (map :time (best-chain chain)))]
-      (when (not= difficulty
-                  expected-difficulty)
-        (prn candidate-block))
       (= difficulty
          expected-difficulty))))
 
-(defn valid? [blockchain max-threshold ledger block]
+(defn valid? [blockchain max-threshold ledger block halving-frequency base-block-reward]
   (and
    (not (empty? (:transactions block)))
    (valid-proof-of-work? block max-threshold)
    (reasonable-time? (best-chain blockchain) block)
-   (proper-transactions? ledger block)
+   (proper-transactions? ledger block halving-frequency base-block-reward)
    (valid-transaction-root? block)
    (correct-difficulty? blockchain block)))
