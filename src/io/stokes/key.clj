@@ -40,9 +40,20 @@
 
 (defn new-pair
   "returns a new key pair with derived address"
-  []
-  (let [keys (ecc/generate-address-pair)]
-    (merge keys {:address (derive-address keys)})))
+  ([] (let [keys (ecc/generate-address-pair)]
+        (new-pair keys)))
+  ([keys]
+   (merge keys {:address (derive-address keys)})))
+
+(defn readable [keys]
+  (-> keys
+      (update :public-key ecc/x962-encode)
+      (select-keys [:private-key :public-key :created])))
+
+(defn from-readable [keys]
+  (-> keys
+      (update :public-key ecc/x962-decode)
+      new-pair))
 
 (defn yields-address? [encoded-public-key address]
   (= address

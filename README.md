@@ -8,6 +8,10 @@ This repository contains the software to run a `stoken` node which runs the proo
 
 This blockchain is **NOT** secure. Use at your own peril! If you would like to learn the fundamentals of how you might build a blockchain, study this repo. The core functionality of something like Bitcoin exists but finer details around security, in particular around block and transaction validation, are not implemented so if this chain is used at scale it is likely to be attacked profitably.
 
+Block and transaction data is currently not persisted; you will have to sync the chain from scratch when you boot.
+
+There is an option to persist keys -- refer to the `key-store` code in `dev/dev/clj`. Public/private key pairs are stored in the given filename encrypted with some secret you choose. Note the default password in `dev/dev.clj` is just `password` so you will want to change that.
+
 ## About
 
 The node software is organized as a series of components that primarily communicate via a system `queue`. A `scheduler` runs a series of workers that process messages on the `queue`. The `p2p` and `rpc` components can submit work to the queue in response to external events.

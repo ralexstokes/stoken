@@ -32,7 +32,9 @@
    [io.stokes.queue :as queue]
    [io.stokes.hash :as hash]
    [io.stokes.key :as key]
-   [io.stokes.transaction-pool :as transaction-pool]))
+   [io.stokes.key-store :as key-store]
+   [io.stokes.transaction-pool :as transaction-pool]
+   [me.raynes.fs :as fs]))
 
 (def pp pprint)
 
@@ -61,6 +63,7 @@
 (def seed-node? true)
 (def peer-count 4)
 (def max-seed-for-mining 1000000)
+(def key-store-filename "~/.stoken/keys/store")
 
 ;; mine the genesis block
 
@@ -72,7 +75,21 @@
   [str]
   (hex->bignum str))
 
-(defonce some-keys (repeatedly key/new-pair))
+;; save a key to load later
+
+(def password "password")
+
+(when-not (-> key-store-filename
+              fs/expand-home
+              fs/exists?)
+  (key-store/store (take 10 (repeatedly key/new-pair)) key-store-filename password))
+
+(def keystore (key-store/load key-store-filename password))
+
+;;
+
+(def some-keys (concat keystore (repeatedly key/new-pair)))
+
 (def coinbase-key (first some-keys))
 
 (defn- coinbase-key-for [node-number]

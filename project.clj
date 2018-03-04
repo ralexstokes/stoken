@@ -16,6 +16,8 @@
                  [aleph "0.4.4"]
                  [gloss "0.2.6"]
                  [manifold "0.1.6"]
+                 [me.raynes/fs "1.4.6"]
+                 [lock-key "1.5.0"]
                  [com.stuartsierra/component "0.3.2"]]
   :repositories [["jitpack" "https://jitpack.io"]]
   :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
