@@ -10,7 +10,7 @@ This blockchain is **NOT** secure. Use at your own peril! If you would like to l
 
 Block and transaction data is currently not persisted; you will have to sync the chain from scratch when you boot.
 
-There is an option to persist keys -- refer to the `key-store` code in `dev/dev/clj`. Public/private key pairs are stored in the given filename encrypted with some secret you choose. Note the default password in `dev/dev.clj` is just `password` so you will want to change that.
+There is an option to persist keys -- refer to the `key-store` code in `dev/dev.clj`. Public/private key pairs are stored in the given filename encrypted with some secret you choose. Note the default password in `dev/dev.clj` is just `password` so you will want to change that.
 
 ## About
 
