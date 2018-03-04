@@ -59,7 +59,7 @@
 (def total-blocks 3)
 (def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
-(def peer-count 4)
+(def peer-count 3)
 (def max-seed-for-mining 1000000)
 
 ;; mine the genesis block
