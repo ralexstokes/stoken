@@ -8,6 +8,10 @@ This repository contains the software to run a `stoken` node which runs the proo
 
 This blockchain is **NOT** secure. Use at your own peril! If you would like to learn the fundamentals of how you might build a blockchain, study this repo. The core functionality of something like Bitcoin exists but finer details around security, in particular around block and transaction validation, are not implemented so if this chain is used at scale it is likely to be attacked profitably.
 
+## Demos
+
+There are a series of demos I made for a [talk I gave](https://stokes.io/talks/). If you are on this branch and connect to the REPL, you can issue a `(reset)` and the system should load. See `dev/dev.clj` for the full set of configuration options. The individual `demo_*` files contain some statements you can send to the REPL to start exploring the various components involved. If something goes wrong, you should be able to start over with a `(reset)`.
+
 ## About
 
 The node software is organized as a series of components that primarily communicate via a system `queue`. A `scheduler` runs a series of workers that process messages on the `queue`. The `p2p` and `rpc` components can submit work to the queue in response to external events.
