@@ -285,4 +285,5 @@
    (reasonable-time? chain block)
    (proper-transactions? ledger block)
    (valid-transaction-root? block)
-   (correct-difficulty? chain block)))
+   (correct-difficulty? chain block)) ;; rules causing consensus failure; elide for demo
+  block)

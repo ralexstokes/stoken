@@ -82,7 +82,7 @@
 (defn output->address [out]
   (get-in out [:script :address]))
 
-(defn- valid-pay-to-pubkey-hash? [{:keys [hash script signature public-key]}]
+(defn valid-pay-to-pubkey-hash? [{:keys [hash script signature public-key]}]
   (let [address (:address script)]
     (and (key/yields-address? public-key address)
          (key/validates-signature? public-key signature hash))))
