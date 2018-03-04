@@ -7,6 +7,8 @@
   (ecc/x962-encode (:public-key keys)))
 (defn ->private [keys]
   (:private-key keys))
+(defn ->address [keys]
+  (:address keys))
 
 (def sign-hash-with-keys ecc/sign-hash)
 
@@ -41,9 +43,6 @@
   []
   (let [keys (ecc/generate-address-pair)]
     (merge keys {:address (derive-address keys)})))
-
-(defn ->address [keys]
-  (:address keys))
 
 (defn yields-address? [encoded-public-key address]
   (= address
