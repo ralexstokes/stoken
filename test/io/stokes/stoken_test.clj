@@ -56,6 +56,13 @@
              (=  orphans
                  next-orphans)))))
 
+(deftest can-find-parent-in-tree
+  (let [blocks (range 2)
+        [tree _] (inject-blocks chain blocks)
+        f #'block/find-previous-block]
+    (is (and (f tree (block-of 1))
+             (not (f tree (block-of 22)))))))
+
 (deftest can-insert-blocks-and-get-back-their-hashes
   (let [number-blocks 10
         max-hash (inc number-blocks)

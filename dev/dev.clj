@@ -51,14 +51,15 @@
 (def max-threshold-str-medium
   "000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
+;; NOTE this threshold is primarily intended for a single peer, for development; some race conditions appear with multiple nodes on a single device with this difficulty that would be highly unlikely on a public network
 (def max-threshold-str-easy
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 20)
-(def max-threshold-str max-threshold-str-easy)
+(def total-blocks 30)
+(def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
-(def peer-count 3)
+(def peer-count 4)
 (def max-seed-for-mining 1000000)
 
 ;; mine the genesis block

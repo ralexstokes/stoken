@@ -117,10 +117,10 @@
   (:children node))
 
 (defn- parent?
-  "indicates if a is a parent of b"
-  [a b]
-  (= (previous b)
-     (hash a)))
+  "indicates if block `parent` is a parent of block `child`"
+  [parent child]
+  (= (previous child)
+     (hash parent)))
 
 (defn- same-block?
   "if two blocks have the same hash, they are the same block"
@@ -264,6 +264,7 @@
   (let [transactions (:transactions block)
         coinbase-transaction (first transactions)]
     (and (transaction/coinbase? coinbase-transaction)
+         (every? false? (map transaction/coinbase? (rest transactions)))
          (every? true? (map (partial transaction/valid? ledger) transactions)))))
 
 (defn valid-transaction-root? [block]
@@ -272,17 +273,25 @@
     (= transaction-root
        (transactions->root  transactions))))
 
-(defn correct-difficulty? [chain block]
-  (let [difficulty (difficulty block)
-        expected-difficulty (calculate-difficulty (last chain) (map :time chain))]
-    (= difficulty
-       expected-difficulty)))
+(defn- find-previous-block [chain target]
+  (let [blocks (tree->blocks chain)]
+    (first (filter #(parent? % target) blocks))))
 
-(defn valid? [chain max-threshold ledger block]
+(defn correct-difficulty? [chain block]
+  (when-let [candidate-block (find-previous-block chain block)]
+    (let [difficulty (difficulty block)
+          expected-difficulty (calculate-difficulty candidate-block (map :time (best-chain chain)))]
+      (when (not= difficulty
+                  expected-difficulty)
+        (prn candidate-block))
+      (= difficulty
+         expected-difficulty))))
+
+(defn valid? [blockchain max-threshold ledger block]
   (and
    (not (empty? (:transactions block)))
    (valid-proof-of-work? block max-threshold)
-   (reasonable-time? chain block)
+   (reasonable-time? (best-chain blockchain) block)
    (proper-transactions? ledger block)
    (valid-transaction-root? block)
-   (correct-difficulty? chain block)))
+   (correct-difficulty? blockchain block)))

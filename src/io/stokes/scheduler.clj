@@ -34,7 +34,7 @@
   (when
       (and (not (state/contains-block? state block))
            (let [[chain ledger] (state/reader state
-                                              (comp block/best-chain :blockchain)
+                                              :blockchain
                                               :ledger)
                  max-threshold (:max-threshold miner)]
              (block/valid? chain max-threshold ledger block)))
