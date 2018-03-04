@@ -56,7 +56,7 @@
   "0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 (def transactions [])
-(def total-blocks 30)
+(def total-blocks 3)
 (def max-threshold-str max-threshold-str-medium)
 (def seed-node? true)
 (def peer-count 4)
@@ -75,10 +75,10 @@
 (defonce some-keys (repeatedly key/new-pair))
 (def coinbase-key (first some-keys))
 
-(defn- coinbase-key-for [node-number]
+(defn coinbase-key-for [node-number]
   (nth some-keys node-number))
 
-(defn- coinbase-for [node-number]
+(defn coinbase-for [node-number]
   (-> node-number
       coinbase-key-for
       key/->address))
@@ -313,7 +313,7 @@
        :state
        state/->balances))
 
-(defn- balances [system]
+(defn balances [system]
   (->> system
        ->nodes
        (map ->balance)))
@@ -338,7 +338,7 @@
        ledgers
        (apply =)))
 
-(defn- from-node
+(defn from-node
   ([system ks] (from-node system ks first))
   ([system ks selector]
    (->> (select-keys (->> system
