@@ -17,15 +17,18 @@
   (queue/submit-block queue block)
   (p2p/send-block p2p block))
 
-(defn- run-miner [{:keys [queue miner p2p] :as scheduler} chain transaction-pool]
+(defn- run-miner [{:keys [queue miner p2p state]}]
   (let [channel (:channel miner)
         cancel (async/chan)]
     (async/go-loop []
       (let [[_ channel] (async/alts! [cancel] :default :continue)]
         (when-not (= channel cancel)
-          (if-let [block (miner/mine miner chain transaction-pool)]
-            (publish-block block queue p2p)
-            (recur)))))
+          (let [[chain transaction-pool] (state/reader state
+                                                       (comp block/best-chain :blockchain)
+                                                       :transaction-pool)]
+            (if-let [block (miner/mine miner chain transaction-pool)]
+              (publish-block block queue p2p)
+              (recur))))))
     (reset! channel cancel)))
 
 (defmulti dispatch queue/dispatch)
@@ -50,13 +53,12 @@
 
 (defmethod dispatch :mine [{force? :mine} {:keys [state queue miner total-blocks] :as scheduler}]
   (cancel-miner miner)
-  (let [chain (state/->best-chain state)
-        pool (state/->transactions state)]
-    (if total-blocks
+  (if total-blocks
+    (let [[chain] (state/reader state (comp block/best-chain :blockchain))]
       (when (or force?
                 (pos? (- total-blocks (count chain))))
-        (run-miner scheduler chain pool))
-      (run-miner scheduler chain pool))))
+        (run-miner scheduler)))
+    (run-miner scheduler)))
 
 (defmethod dispatch :peers [{peer-set :peers} {:keys [p2p]}]
   (let [new-peers (p2p/merge-into-peer-set p2p peer-set)]
