@@ -51,11 +51,11 @@
   ([inputs outputs] (io.stokes.transaction/new {:inputs inputs
                                                 :outputs outputs})))
 
-(defn for-coinbase [address subsidy block-height]
+(defn for-coinbase [address value block-height]
   (io.stokes.transaction/new
    {:inputs [{:type :coinbase-input
               :block-height block-height}]
-    :outputs [(new-output subsidy address)]}))
+    :outputs [(new-output value address)]}))
 
 (defn coinbase? [transaction]
   (->> transaction

@@ -356,7 +356,8 @@
         inputs [input]
         outputs [(transaction/new-output value (key/->address to-keys))
                  (transaction/new-output (- (transaction/input->value input)
-                                            value) (key/->address from-keys))]]
+                                            value
+                                            1) (key/->address from-keys))]]
     (transaction/new inputs outputs)))
 
 (defn inject-transaction
@@ -456,7 +457,6 @@
        ->nodes
        (map :queue)
        (map #(queue/submit-request-to-mine % :force? true)))
-
 
   (let [states (mapcat #(from-node system [:state] (fn [nodes] (nth nodes %))) (range 3))
         ledgers (map #(-> %

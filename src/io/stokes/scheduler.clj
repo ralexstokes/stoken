@@ -54,7 +54,7 @@
 (defmethod dispatch :mine [{force? :mine} {:keys [state queue miner total-blocks] :as scheduler}]
   (cancel-miner miner)
   (if total-blocks
-    (let [[chain] (state/reader state (comp block/best-chain :blockchain))]
+    (let [chain (state/reader state (comp block/best-chain :blockchain))]
       (when (or force?
                 (pos? (- total-blocks (count chain))))
         (run-miner scheduler)))

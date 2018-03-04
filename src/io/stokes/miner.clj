@@ -24,8 +24,8 @@
 (defn- select-transactions [pool]
   (transaction-pool/take-by-fee pool 20))
 
-(defn- ->coinbase-transaction [address subsidy block-height]
-  (transaction/for-coinbase address subsidy block-height))
+(defn- ->coinbase-transaction [address subsidy block-height block-fees]
+  (transaction/for-coinbase address (+ subsidy block-fees) block-height))
 
 (def ^:private default-number-of-rounds
   "how many nonces to search for a solution"
@@ -48,7 +48,8 @@
 (defn- derive-next-block [chain coinbase transaction-pool halving-frequency base-block-reward]
   (let [transactions (select-transactions transaction-pool)
         subsidy (calculate-subsidy chain halving-frequency base-block-reward)
-        coinbase-transaction (->coinbase-transaction coinbase subsidy (count chain))]
+        block-fees (reduce + (map transaction/fee transactions))
+        coinbase-transaction (->coinbase-transaction coinbase subsidy (count chain) block-fees)]
     (block/next-template chain (conj transactions
                                      coinbase-transaction))))
 
