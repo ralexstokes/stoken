@@ -4,6 +4,11 @@ A proof-of-work blockchain that maintains a ledger of coin balances like Bitcoin
 
 This repository contains the software to run a `stoken` node which runs the proof-of-work (PoW) algorithm, participates in a peer-to-peer gossip protocol and offers RPC endpoints to inspect the node's state.
 
+
+## Demos
+
+There are a series of demos I made for a [talk I gave](https://stokes.io/talks/). If you are on this branch and connect to the REPL, you can issue a `(reset)` and the system should load. See `dev/dev.clj` for the full set of configuration options. The individual `demo_*` files contain some statements you can send to the REPL to start exploring the various components involved. If something goes wrong, you should be able to start over with a `(reset)`.
+
 ## About
 
 The node software is organized as a series of components that primarily communicate via a system `queue`. A `scheduler` runs a series of workers that process messages on the `queue`. The `p2p` and `rpc` components can submit work to the queue in response to external events.
